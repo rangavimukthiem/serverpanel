@@ -18,21 +18,27 @@ EKAFY is a lightweight VPS control panel built with Express, MariaDB, JWT authen
 
 ### Automated Linux VPS Setup
 
-On Ubuntu/Debian, copy the repository to `/srv/ekafy`, then run:
+On Ubuntu/Debian, clone the repository anywhere, then run the initializer. It copies the project into `/srv/ekafy` automatically:
 
 ```bash
-cd /srv/ekafy
+git clone https://github.com/rangavimukthiem/srv.git
+cd srv
 sudo bash init.sh
 ```
 
 With Nginx reverse proxy:
 
 ```bash
-cd /srv/ekafy
 sudo bash init.sh --install-nginx --domain panel.example.com
 ```
 
-The initializer installs system packages, creates a MariaDB database/user, writes `.env`, installs Node dependencies, creates a systemd service, and can create the first admin user.
+Use a custom target directory if needed:
+
+```bash
+sudo bash init.sh --app-dir /srv/my-panel
+```
+
+The initializer copies files to the target directory, installs system packages, creates a MariaDB database/user, writes `.env`, installs Node dependencies, creates a systemd service, and can create the first admin user.
 
 Useful production commands:
 

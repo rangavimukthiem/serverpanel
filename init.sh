@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 APP_NAME="ekafy"
 APP_DIR="/srv/ekafy"
+SOURCE_DIR=""
 APP_USER="ekafy"
 APP_GROUP="ekafy"
 SERVICE_NAME="ekafy"
@@ -39,6 +40,7 @@ Usage:
 
 Options:
   --app-dir PATH              App directory. Default: /srv/ekafy
+  --source-dir PATH           Repository source directory. Default: directory containing init.sh
   --app-user USER             Linux user for the app. Default: ekafy
   --db-name NAME              MariaDB database name. Default: ekafy
   --db-user USER              MariaDB app user. Default: ekafy
@@ -53,6 +55,7 @@ Options:
 
 Examples:
   sudo bash init.sh
+  sudo bash /tmp/srv/init.sh --app-dir /srv/ekafy
   sudo bash init.sh --install-nginx --domain panel.example.com
   sudo bash init.sh --app-dir /srv/ekafy --admin-username owner
 USAGE
@@ -62,6 +65,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --app-dir)
       APP_DIR="${2:-}"
+      shift 2
+      ;;
+    --source-dir)
+      SOURCE_DIR="${2:-}"
       shift 2
       ;;
     --app-user)
@@ -134,6 +141,9 @@ require_command() {
 
 validate_inputs() {
   [[ "$APP_DIR" == /* ]] || fail "--app-dir must be an absolute path."
+  if [[ -n "$SOURCE_DIR" ]]; then
+    [[ "$SOURCE_DIR" == /* ]] || fail "--source-dir must be an absolute path."
+  fi
   [[ "$APP_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || fail "--app-user must be a valid Linux system username."
   [[ "$DB_NAME" =~ ^[A-Za-z0-9_]{1,64}$ ]] || fail "--db-name must contain only letters, numbers, and underscores."
   [[ "$DB_USER" =~ ^[A-Za-z0-9_]{1,32}$ ]] || fail "--db-user must contain only letters, numbers, and underscores."
@@ -165,7 +175,7 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
 
   apt-get update
-  apt-get install -y ca-certificates curl gnupg openssl sudo mariadb-server
+  apt-get install -y ca-certificates curl gnupg openssl rsync sudo mariadb-server
 
   if ! command -v node >/dev/null 2>&1; then
     log "Installing Node.js ${NODE_MAJOR}.x from NodeSource"
@@ -191,15 +201,37 @@ create_app_user() {
 }
 
 prepare_app_dir() {
-  log "Preparing application directory: $APP_DIR"
-  mkdir -p "$APP_DIR"
-
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-  if [[ "$script_dir" != "$APP_DIR" ]]; then
-    warn "Script is running from $script_dir, expected project directory $APP_DIR."
-    warn "Copy this repository to $APP_DIR before running for a normal production install."
+  if [[ -z "$SOURCE_DIR" ]]; then
+    SOURCE_DIR="$script_dir"
+  fi
+
+  SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
+
+  [[ -f "$SOURCE_DIR/package.json" ]] || fail "Missing $SOURCE_DIR/package.json"
+  [[ -f "$SOURCE_DIR/database.sql" ]] || fail "Missing $SOURCE_DIR/database.sql"
+
+  log "Preparing application directory: $APP_DIR"
+  mkdir -p "$APP_DIR"
+
+  if [[ "$SOURCE_DIR" != "$APP_DIR" ]]; then
+    case "$APP_DIR/" in
+      "$SOURCE_DIR"/*)
+        fail "Target app directory cannot be inside the source directory. Use a separate path such as /srv/ekafy."
+        ;;
+    esac
+
+    log "Copying project files from $SOURCE_DIR to $APP_DIR"
+    rsync -a \
+      --exclude '.git/' \
+      --exclude 'node_modules/' \
+      --exclude '.env' \
+      --exclude '*.log' \
+      "$SOURCE_DIR/" "$APP_DIR/"
+  else
+    log "Source and target are the same directory; skipping copy"
   fi
 
   [[ -f "$APP_DIR/package.json" ]] || fail "Missing $APP_DIR/package.json"
