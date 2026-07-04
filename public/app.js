@@ -3,6 +3,12 @@ const userKey = 'ekafy_user';
 
 const services = ['nginx', 'mysql', 'mariadb', 'apache2'];
 
+let dashboardState = {
+  user: null,
+  projects: [],
+  users: []
+};
+
 function getToken() {
   return localStorage.getItem(tokenKey);
 }
@@ -23,6 +29,19 @@ function setSession({ token, user }) {
 function clearSession() {
   localStorage.removeItem(tokenKey);
   localStorage.removeItem(userKey);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function isAdmin() {
+  return dashboardState.user?.role === 'admin';
 }
 
 async function api(path, options = {}) {
@@ -106,9 +125,9 @@ function renderServices() {
         <span class="service-status" data-service-status="${service}">Checking</span>
       </header>
       <div class="service-actions">
-        <button type="button" data-service="${service}" data-action="start">Start</button>
-        <button class="restart" type="button" data-service="${service}" data-action="restart">Restart</button>
-        <button class="stop" type="button" data-service="${service}" data-action="stop">Stop</button>
+        <button type="button" data-service="${service}" data-action="start" ${isAdmin() ? '' : 'disabled'}>Start</button>
+        <button class="restart" type="button" data-service="${service}" data-action="restart" ${isAdmin() ? '' : 'disabled'}>Restart</button>
+        <button class="stop" type="button" data-service="${service}" data-action="stop" ${isAdmin() ? '' : 'disabled'}>Stop</button>
       </div>
     </article>
   `).join('');
@@ -135,15 +154,171 @@ async function loadProjects() {
 
   try {
     const data = await api('/api/projects');
+    dashboardState.projects = data.projects;
     grid.innerHTML = data.projects.map((project) => `
       <article class="project-card">
-        <h4>${project.name}</h4>
-        <p>${project.path}</p>
-        <p>Status: ${project.status}</p>
+        <h4>${escapeHtml(project.name)}</h4>
+        <p>${escapeHtml(project.path)}</p>
+        <p>Status: ${escapeHtml(project.status)}</p>
+        <p>Your access: ${escapeHtml(project.current_user_role || 'member')}</p>
+        <div>${renderMemberPills(project.members)}</div>
       </article>
     `).join('');
+    syncProjectOptions();
   } catch (error) {
     grid.innerHTML = `<p class="message">${error.message}</p>`;
+  }
+}
+
+function renderMemberPills(members = []) {
+  if (!members.length) {
+    return '<span class="role-pill">No members</span>';
+  }
+
+  return members.map((member) => `
+    <span class="role-pill">${escapeHtml(member.username)} - ${escapeHtml(member.project_role)}</span>
+  `).join('');
+}
+
+async function loadUsers() {
+  const table = document.getElementById('usersTable');
+  if (!table || !isAdmin()) return;
+
+  try {
+    const data = await api('/api/users');
+    dashboardState.users = data.users;
+    table.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Global Role</th>
+            <th>Project Access</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.users.map(renderUserRow).join('')}
+        </tbody>
+      </table>
+    `;
+    syncUserOptions();
+  } catch (error) {
+    table.innerHTML = `<p class="message">${error.message}</p>`;
+  }
+}
+
+function renderUserRow(user) {
+  const projects = user.projects.length
+    ? user.projects.map((project) => `<span class="role-pill">${escapeHtml(project.name)} - ${escapeHtml(project.role)}</span>`).join('')
+    : '<span class="role-pill">No projects</span>';
+
+  return `
+    <tr>
+      <td>${escapeHtml(user.username)}</td>
+      <td>${escapeHtml(user.role)}</td>
+      <td>${projects}</td>
+      <td>${new Date(user.created_at).toLocaleString()}</td>
+    </tr>
+  `;
+}
+
+function syncProjectOptions() {
+  const select = document.querySelector('#memberForm select[name="projectId"]');
+  if (!select) return;
+
+  select.innerHTML = '<option value="">Project</option>' + dashboardState.projects.map((project) => (
+    `<option value="${project.id}">${escapeHtml(project.name)}</option>`
+  )).join('');
+}
+
+function syncUserOptions() {
+  const select = document.querySelector('#memberForm select[name="userId"]');
+  if (!select) return;
+
+  select.innerHTML = '<option value="">User</option>' + dashboardState.users.map((user) => (
+    `<option value="${user.id}">${escapeHtml(user.username)} (${escapeHtml(user.role)})</option>`
+  )).join('');
+}
+
+function setAdminVisibility() {
+  document.querySelectorAll('.admin-only').forEach((node) => {
+    node.hidden = !isAdmin();
+  });
+}
+
+function bindAdminForms() {
+  const userForm = document.getElementById('userForm');
+  const projectForm = document.getElementById('projectForm');
+  const memberForm = document.getElementById('memberForm');
+  const message = document.getElementById('accessMessage');
+
+  if (userForm) {
+    userForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = 'Creating user...';
+
+      try {
+        await api('/api/users', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: userForm.username.value.trim(),
+            password: userForm.password.value,
+            role: userForm.role.value
+          })
+        });
+        userForm.reset();
+        message.textContent = 'User created';
+        await loadUsers();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+  }
+
+  if (projectForm) {
+    projectForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = 'Creating project...';
+
+      try {
+        await api('/api/projects', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: projectForm.name.value.trim(),
+            slug: projectForm.slug.value.trim(),
+            path: projectForm.path.value.trim()
+          })
+        });
+        projectForm.reset();
+        message.textContent = 'Project created';
+        await loadProjects();
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
+  }
+
+  if (memberForm) {
+    memberForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      message.textContent = 'Saving project member...';
+
+      try {
+        await api(`/api/projects/${memberForm.projectId.value}/members`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            userId: Number(memberForm.userId.value),
+            role: memberForm.role.value
+          })
+        });
+        memberForm.reset();
+        message.textContent = 'Project member saved';
+        await Promise.all([loadProjects(), loadUsers()]);
+      } catch (error) {
+        message.textContent = error.message;
+      }
+    });
   }
 }
 
@@ -188,7 +363,9 @@ function bootDashboard() {
   }
 
   const user = getUser();
-  document.getElementById('userRole').textContent = user ? `${user.username} · ${user.role}` : 'Control panel';
+  dashboardState.user = user;
+  document.getElementById('userRole').textContent = user ? `${user.username} - ${user.role}` : 'Control panel';
+  setAdminVisibility();
 
   document.getElementById('logoutButton').addEventListener('click', () => {
     clearSession();
@@ -206,7 +383,9 @@ function bootDashboard() {
   });
 
   renderServices();
+  bindAdminForms();
   loadProjects();
+  loadUsers();
   loadStatus().catch((error) => {
     if (error.message.includes('token')) {
       clearSession();

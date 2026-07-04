@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const systemRoutes = require('./routes/system');
 const serviceRoutes = require('./routes/services');
 const projectRoutes = require('./routes/projects');
+const userRoutes = require('./routes/users');
 const { testConnection } = require('./config/db');
 const { authenticateToken } = require('./middleware/authMiddleware');
 
@@ -26,6 +27,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/system', authenticateToken, systemRoutes);
 app.use('/api/services', authenticateToken, serviceRoutes);
 app.use('/api/projects', authenticateToken, projectRoutes);
+app.use('/api/users', authenticateToken, userRoutes);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ message: 'API route not found' });

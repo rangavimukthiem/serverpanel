@@ -2,6 +2,8 @@
 
 EKAFY is a lightweight VPS control panel built with Express, MariaDB, JWT authentication, and a vanilla HTML/CSS/JavaScript frontend.
 
+For command-by-command usage, API examples, service controls, database commands, and troubleshooting, read [FUNCTIONS.md](FUNCTIONS.md).
+
 ## Current Build Slice
 
 - Express API server
@@ -9,6 +11,8 @@ EKAFY is a lightweight VPS control panel built with Express, MariaDB, JWT authen
 - User registration and login with bcrypt password hashing
 - JWT route protection
 - Login rate limiting
+- Admin user management
+- Project membership with project-specific `manager` and `user` roles
 - System status endpoint at `GET /api/system/status`
 - Whitelisted service control at `POST /api/services/:name/:action`
 - Vanilla dashboard with auto-refreshing metrics
