@@ -1,0 +1,24 @@
+CREATE DATABASE IF NOT EXISTS ekafy CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE ekafy;
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username VARCHAR(64) NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  role ENUM('admin', 'user') NOT NULL DEFAULT 'user',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY users_username_unique (username)
+);
+
+CREATE TABLE IF NOT EXISTS logs (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id INT UNSIGNED NULL,
+  action VARCHAR(255) NOT NULL,
+  timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY logs_user_id_index (user_id),
+  CONSTRAINT logs_user_id_foreign
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE SET NULL
+);

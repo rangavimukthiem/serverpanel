@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EKAFY Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-row">
+          <div class="brand-mark">E</div>
+          <div>
+            <h1>EKAFY</h1>
+            <p id="userRole">Control panel</p>
+          </div>
+        </div>
+
+        <nav class="nav-list" aria-label="Main">
+          <a class="active" href="/dashboard.html">Dashboard</a>
+          <a href="#services">Services</a>
+          <a href="#projects">Projects</a>
+        </nav>
+
+        <button id="logoutButton" class="ghost-button" type="button">Log out</button>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Server overview</p>
+            <h2>Dashboard</h2>
+          </div>
+          <div class="refresh-pill">Auto refresh: 5s</div>
+        </header>
+
+        <section class="metric-grid" aria-label="System metrics">
+          <article class="metric-card">
+            <span>CPU</span>
+            <strong id="cpuValue">--%</strong>
+            <div class="meter"><div id="cpuMeter"></div></div>
+          </article>
+          <article class="metric-card">
+            <span>RAM</span>
+            <strong id="ramValue">--%</strong>
+            <div class="meter"><div id="ramMeter"></div></div>
+          </article>
+          <article class="metric-card">
+            <span>Disk</span>
+            <strong id="diskValue">--%</strong>
+            <div class="meter"><div id="diskMeter"></div></div>
+          </article>
+          <article class="metric-card">
+            <span>Uptime</span>
+            <strong id="uptimeValue">--</strong>
+            <small>Host runtime</small>
+          </article>
+        </section>
+
+        <section id="services" class="panel-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Whitelisted systemd units</p>
+              <h3>Services</h3>
+            </div>
+            <button id="refreshStatusButton" class="ghost-button" type="button">Refresh</button>
+          </div>
+
+          <div id="servicesGrid" class="service-grid"></div>
+          <p id="serviceMessage" class="message" role="status"></p>
+        </section>
+
+        <section id="projects" class="panel-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Deployments</p>
+              <h3>Projects</h3>
+            </div>
+          </div>
+          <div id="projectsGrid" class="project-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
