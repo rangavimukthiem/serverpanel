@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { createUser, findUserByUsername } = require('../models/userModel');
+const { createUser, findUserByUsername, countUsers } = require('../models/userModel');
 const { createLog } = require('../models/logModel');
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
@@ -28,6 +28,13 @@ function signToken(user) {
 
 async function register(req, res, next) {
   try {
+    const existingUserCount = await countUsers();
+    const registrationEnabled = process.env.ALLOW_REGISTRATION === 'true';
+
+    if (existingUserCount > 0 && !registrationEnabled) {
+      return res.status(403).json({ message: 'Registration is disabled' });
+    }
+
     const { username, password, role = 'user' } = req.body;
 
     if (!USERNAME_PATTERN.test(username || '')) {
@@ -38,7 +45,9 @@ async function register(req, res, next) {
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
 
-    if (!ALLOWED_ROLES.has(role)) {
+    const requestedRole = existingUserCount === 0 ? 'admin' : role;
+
+    if (!ALLOWED_ROLES.has(requestedRole)) {
       return res.status(400).json({ message: 'Invalid role' });
     }
 
@@ -48,10 +57,10 @@ async function register(req, res, next) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await createUser({ username, passwordHash, role });
+    const user = await createUser({ username, passwordHash, role: requestedRole });
     const token = signToken(user);
 
-    await createLog({ userId: user.id, action: `registered ${role} user ${username}` });
+    await createLog({ userId: user.id, action: `registered ${requestedRole} user ${username}` });
 
     return res.status(201).json({ token, user: sanitizeUser(user) });
   } catch (error) {

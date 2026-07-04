@@ -31,8 +31,14 @@ async function findUserById(id) {
   return rows[0] || null;
 }
 
+async function countUsers() {
+  const rows = await query('SELECT COUNT(*) AS total FROM users');
+  return Number(rows[0]?.total || 0);
+}
+
 module.exports = {
   createUser,
   findUserByUsername,
-  findUserById
+  findUserById,
+  countUsers
 };

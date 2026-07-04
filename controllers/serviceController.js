@@ -17,6 +17,18 @@ function isServiceControlEnabled() {
   return process.env.ENABLE_SERVICE_CONTROL === 'true';
 }
 
+function systemctlCommand(args) {
+  if (process.platform === 'win32') {
+    return { file: 'systemctl', args };
+  }
+
+  if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+    return { file: 'sudo', args: ['-n', 'systemctl', ...args] };
+  }
+
+  return { file: 'systemctl', args };
+}
+
 async function controlService(req, res, next) {
   try {
     const { name, action } = req.params;
@@ -40,7 +52,8 @@ async function controlService(req, res, next) {
       return res.status(503).json({ message: 'systemctl is available only on Linux hosts' });
     }
 
-    await execFileAsync('systemctl', [action, service], { timeout: 10000 });
+    const command = systemctlCommand([action, service]);
+    await execFileAsync(command.file, command.args, { timeout: 10000 });
     await createLog({ userId: req.user.id, action: `${action} service ${service}` });
 
     return res.json({ message: `${service} ${action} command completed` });
@@ -64,7 +77,8 @@ async function serviceStatus(req, res, next) {
     }
 
     try {
-      await execFileAsync('systemctl', ['is-active', '--quiet', service], { timeout: 2500 });
+      const command = systemctlCommand(['is-active', '--quiet', service]);
+      await execFileAsync(command.file, command.args, { timeout: 2500 });
       return res.json({ service, active: true });
     } catch (_error) {
       return res.json({ service, active: false });
