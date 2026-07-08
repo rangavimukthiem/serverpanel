@@ -41,11 +41,11 @@ function getAuthCookieOptions() {
     cookieOptions.maxAge = maxAge;
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    cookieOptions.secure = true;
-  }
-
   return cookieOptions;
+}
+
+function isSecureRequest(req) {
+  return Boolean(req.secure || req.headers['x-forwarded-proto'] === 'https');
 }
 
 function sanitizeUser(user) {
@@ -68,15 +68,27 @@ function signToken(user) {
   );
 }
 
-function setAuthCookie(res, token) {
-  res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+function setAuthCookie(req, res, token) {
+  const cookieOptions = getAuthCookieOptions();
+
+  if (isSecureRequest(req)) {
+    cookieOptions.secure = true;
+  }
+
+  res.cookie(AUTH_COOKIE_NAME, token, cookieOptions);
 }
 
-function clearAuthCookie(res) {
-  res.clearCookie(AUTH_COOKIE_NAME, {
+function clearAuthCookie(req, res) {
+  const cookieOptions = {
     path: '/',
     sameSite: 'lax'
-  });
+  };
+
+  if (isSecureRequest(req)) {
+    cookieOptions.secure = true;
+  }
+
+  res.clearCookie(AUTH_COOKIE_NAME, cookieOptions);
 }
 
 async function register(req, res, next) {
@@ -112,7 +124,7 @@ async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser({ username, passwordHash, role: requestedRole });
     const token = signToken(user);
-    setAuthCookie(res, token);
+    setAuthCookie(req, res, token);
 
     await createLog({ userId: user.id, action: `registered ${requestedRole} user ${username}` });
 
@@ -145,7 +157,7 @@ async function login(req, res, next) {
     }
 
     const token = signToken(user);
-    setAuthCookie(res, token);
+    setAuthCookie(req, res, token);
     await createLog({ userId: user.id, action: `logged in as ${username}` });
 
     return res.json({ token, user: sanitizeUser(user) });
@@ -158,8 +170,8 @@ async function me(req, res) {
   return res.json({ user: sanitizeUser(req.user) });
 }
 
-async function logout(_req, res) {
-  clearAuthCookie(res);
+async function logout(req, res) {
+  clearAuthCookie(req, res);
   return res.json({ message: 'Logged out' });
 }
 

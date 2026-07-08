@@ -15,6 +15,7 @@ const { authenticateToken } = require('./middleware/authMiddleware');
 const app = express();
 const port = Number(process.env.PORT || 3000);
 
+app.set('trust proxy', 1);
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json({ limit: '64kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
