@@ -84,11 +84,17 @@ async function updateUserRole(id, role) {
   return findUserById(id);
 }
 
+async function deleteUserById(id) {
+  const result = await query('DELETE FROM users WHERE id = ?', [id]);
+  return Number(result.affectedRows || 0) > 0;
+}
+
 module.exports = {
   createUser,
   listUsersWithProjects,
   findUserByUsername,
   findUserById,
   countUsers,
-  updateUserRole
+  updateUserRole,
+  deleteUserById
 };

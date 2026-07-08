@@ -4,7 +4,8 @@ const {
   findUserById,
   findUserByUsername,
   listUsersWithProjects,
-  updateUserRole
+  updateUserRole,
+  deleteUserById
 } = require('../models/userModel');
 const { createLog } = require('../models/logModel');
 
@@ -82,8 +83,39 @@ async function changeUserRole(req, res, next) {
   }
 }
 
+async function deleteManagedUser(req, res, next) {
+  try {
+    const userId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ message: 'Invalid user id' });
+    }
+
+    if (req.user.id === userId) {
+      return res.status(400).json({ message: 'You cannot delete your own account while signed in' });
+    }
+
+    const user = await findUserById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const deleted = await deleteUserById(userId);
+    if (!deleted) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await createLog({ userId: req.user.id, action: `deleted user ${user.username}` });
+
+    return res.json({ message: 'User deleted' });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listUsers,
   createManagedUser,
-  changeUserRole
+  changeUserRole,
+  deleteManagedUser
 };
