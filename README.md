@@ -17,6 +17,7 @@ For command-by-command usage, API examples, service controls, database commands,
 - Whitelisted service control at `POST /api/services/:name/:action`
 - Vanilla dashboard with auto-refreshing metrics
 - Activity log writes for auth and service actions
+- Global popup message bar for API errors and admin feedback
 
 ## Setup
 
@@ -42,7 +43,7 @@ Use a custom target directory if needed:
 sudo bash init.sh --app-dir /srv/my-panel
 ```
 
-The initializer copies files to the target directory, installs system packages, creates a MariaDB database/user, writes `.env`, installs Node dependencies, creates a systemd service, and can create the first admin user.
+The initializer syncs the current repository into the target directory, removes stale files from previous installs, backs up any existing `.env` to `/var/backups/ekafy/`, installs system packages, creates a MariaDB database/user, writes `.env`, installs Node dependencies, creates a systemd service, and can create the first admin user.
 
 Useful production commands:
 

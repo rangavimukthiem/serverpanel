@@ -27,6 +27,10 @@ body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+body.has-global-message {
+  padding-top: 58px;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -166,6 +170,59 @@ select:focus {
 
 .message {
   min-height: 22px;
+}
+
+.global-message-bar {
+  align-items: center;
+  background: rgba(17, 24, 39, 0.96);
+  border-bottom: 1px solid rgba(251, 113, 133, 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  display: none;
+  gap: 12px;
+  left: 0;
+  padding: 14px 18px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 9999;
+}
+
+.global-message-bar.is-visible {
+  display: flex;
+}
+
+.global-message-bar.is-error {
+  border-bottom-color: rgba(251, 113, 133, 0.55);
+}
+
+.global-message-bar.is-success {
+  border-bottom-color: rgba(45, 212, 191, 0.55);
+}
+
+.global-message-bar.is-info {
+  border-bottom-color: rgba(148, 163, 184, 0.55);
+}
+
+.global-message-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.global-message-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 24px;
+  min-height: 0;
+  padding: 0 4px;
+}
+
+.global-message-close:hover {
+  background: transparent;
+  transform: none;
+  opacity: 0.8;
 }
 
 .app-shell {
@@ -403,6 +460,11 @@ select:focus {
 }
 
 @media (max-width: 560px) {
+  .global-message-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .content,
   .sidebar {
     padding: 18px;

@@ -7,6 +7,10 @@
     <link rel="stylesheet" href="/style.css">
   </head>
   <body class="auth-page">
+    <div id="globalMessageBar" class="global-message-bar" role="status" aria-live="polite" hidden>
+      <span class="global-message-text"></span>
+      <button type="button" class="global-message-close" aria-label="Dismiss message">×</button>
+    </div>
     <main class="auth-shell">
       <section class="auth-panel">
         <div class="brand-row">
@@ -34,6 +38,7 @@
       </section>
     </main>
 
+    <script src="/notifications.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

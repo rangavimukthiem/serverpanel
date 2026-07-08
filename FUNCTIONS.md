@@ -22,6 +22,8 @@ Install into a custom directory:
 sudo bash init.sh --app-dir /srv/my-panel
 ```
 
+The installer syncs the repository into the target directory, deletes stale files from previous installs, and backs up any existing `.env` to `/var/backups/ekafy/`.
+
 Check installer options:
 
 ```bash

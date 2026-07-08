@@ -10,6 +10,24 @@ function clearSession() {
   dashboardState.user = null;
 }
 
+function reportError(error, context) {
+  if (window.ekafyReportError) {
+    window.ekafyReportError(error, context);
+    return;
+  }
+
+  console.error(context || 'App error', error);
+}
+
+function redirectOnAuthError(error) {
+  if (error?.status === 401) {
+    window.location.href = '/login.html';
+    return true;
+  }
+
+  return false;
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -38,8 +56,13 @@ async function api(path, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const error = new Error(data.message || 'Request failed');
-    error.status = response.status;
+    const ErrorClass = window.ApiError || Error;
+    const error = new ErrorClass(
+      data.message || 'Request failed',
+      response.status,
+      data.code || 'REQUEST_FAILED',
+      data.details || null
+    );
     throw error;
   }
 
@@ -87,6 +110,10 @@ async function loadServiceStatus(name) {
       statusNode.textContent = data.active ? 'Active' : 'Inactive';
     }
   } catch (error) {
+    if (redirectOnAuthError(error)) {
+      return;
+    }
+    reportError(error, `Loading service status for ${name}`);
     statusNode.textContent = error.message;
   }
 }
@@ -121,6 +148,10 @@ async function runServiceAction(service, action) {
     message.textContent = data.message;
     await loadServiceStatus(service);
   } catch (error) {
+    if (redirectOnAuthError(error)) {
+      return;
+    }
+    reportError(error, `Running ${action} on ${service}`);
     message.textContent = error.message;
   }
 }
@@ -143,10 +174,10 @@ async function loadProjects() {
     `).join('');
     syncProjectOptions();
   } catch (error) {
-    if (error.status === 401) {
-      window.location.href = '/login.html';
+    if (redirectOnAuthError(error)) {
       return;
     }
+    reportError(error, 'Loading projects');
     grid.innerHTML = `<p class="message">${error.message}</p>`;
   }
 }
@@ -185,10 +216,10 @@ async function loadUsers() {
     `;
     syncUserOptions();
   } catch (error) {
-    if (error.status === 401) {
-      window.location.href = '/login.html';
+    if (redirectOnAuthError(error)) {
       return;
     }
+    reportError(error, 'Loading users');
     table.innerHTML = `<p class="message">${error.message}</p>`;
   }
 }
@@ -256,6 +287,10 @@ function bindAdminForms() {
         message.textContent = 'User created';
         await loadUsers();
       } catch (error) {
+        if (redirectOnAuthError(error)) {
+          return;
+        }
+        reportError(error, 'Creating user');
         message.textContent = error.message;
       }
     });
@@ -279,6 +314,10 @@ function bindAdminForms() {
         message.textContent = 'Project created';
         await loadProjects();
       } catch (error) {
+        if (redirectOnAuthError(error)) {
+          return;
+        }
+        reportError(error, 'Creating project');
         message.textContent = error.message;
       }
     });
@@ -301,6 +340,10 @@ function bindAdminForms() {
         message.textContent = 'Project member saved';
         await Promise.all([loadProjects(), loadUsers()]);
       } catch (error) {
+        if (redirectOnAuthError(error)) {
+          return;
+        }
+        reportError(error, 'Saving project member');
         message.textContent = error.message;
       }
     });
@@ -333,6 +376,7 @@ function bootLogin() {
 
       window.location.href = '/dashboard.html';
     } catch (error) {
+      reportError(error, 'Signing in');
       message.textContent = error.message;
     }
   });
@@ -380,18 +424,16 @@ async function bootDashboard() {
   loadProjects();
   loadUsers();
   loadStatus().catch((error) => {
-    if (error.status === 401) {
-      window.location.href = '/login.html';
+    if (redirectOnAuthError(error)) {
+      return;
     }
+    reportError(error, 'Loading system status');
   });
 
   setInterval(() => {
     loadStatus().catch((error) => {
-      if (error.status === 401) {
-        window.location.href = '/login.html';
-      } else {
-        console.warn(error);
-      }
+      if (redirectOnAuthError(error)) return;
+      reportError(error, 'Refreshing system status');
     });
   }, 5000);
 }

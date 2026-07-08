@@ -1,6 +1,7 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { createLog } = require('../models/logModel');
+const { AppError } = require('../errors/AppError');
 
 const execFileAsync = promisify(execFile);
 
@@ -58,8 +59,10 @@ async function controlService(req, res, next) {
 
     return res.json({ message: `${service} ${action} command completed` });
   } catch (error) {
-    error.publicMessage = 'Service command failed';
-    return next(error);
+    return next(new AppError('Service command failed', 503, 'SERVICE_COMMAND_FAILED', {
+      service: req.params.name,
+      action: req.params.action
+    }));
   }
 }
 

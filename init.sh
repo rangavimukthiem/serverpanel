@@ -17,6 +17,7 @@ CREATE_ADMIN="yes"
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD=""
 ENABLE_SERVICE_CONTROL="true"
+ENV_BACKUP_DIR="/var/backups/ekafy"
 
 log() {
   printf '\n[EKAFY] %s\n' "$*"
@@ -216,23 +217,29 @@ prepare_app_dir() {
   log "Preparing application directory: $APP_DIR"
   mkdir -p "$APP_DIR"
 
-  if [[ "$SOURCE_DIR" != "$APP_DIR" ]]; then
-    case "$APP_DIR/" in
-      "$SOURCE_DIR"/*)
-        fail "Target app directory cannot be inside the source directory. Use a separate path such as /srv/ekafy."
-        ;;
-    esac
-
-    log "Copying project files from $SOURCE_DIR to $APP_DIR"
-    rsync -a \
-      --exclude '.git/' \
-      --exclude 'node_modules/' \
-      --exclude '.env' \
-      --exclude '*.log' \
-      "$SOURCE_DIR/" "$APP_DIR/"
-  else
-    log "Source and target are the same directory; skipping copy"
+  if [[ "$SOURCE_DIR" == "$APP_DIR" ]]; then
+    fail "Target app directory must be different from the source directory."
   fi
+
+  case "$APP_DIR/" in
+    "$SOURCE_DIR"/*)
+      fail "Target app directory cannot be inside the source directory. Use a separate path such as /srv/ekafy."
+      ;;
+  esac
+
+  if [[ -f "$APP_DIR/.env" ]]; then
+    mkdir -p "$ENV_BACKUP_DIR"
+    local backup="$ENV_BACKUP_DIR/.env.$(date +%Y%m%d%H%M%S).bak"
+    log "Backing up existing .env to $backup"
+    cp "$APP_DIR/.env" "$backup"
+  fi
+
+  log "Syncing project files from $SOURCE_DIR to $APP_DIR"
+  rsync -a \
+    --delete \
+    --delete-excluded \
+    --exclude '.git/' \
+    "$SOURCE_DIR/" "$APP_DIR/"
 
   [[ -f "$APP_DIR/package.json" ]] || fail "Missing $APP_DIR/package.json"
   [[ -f "$APP_DIR/database.sql" ]] || fail "Missing $APP_DIR/database.sql"
@@ -264,12 +271,6 @@ write_env() {
   local env_file="$APP_DIR/.env"
   local jwt_secret
   jwt_secret="$(random_secret)"
-
-  if [[ -f "$env_file" ]]; then
-    local backup="$env_file.$(date +%Y%m%d%H%M%S).bak"
-    log "Backing up existing .env to $backup"
-    cp "$env_file" "$backup"
-  fi
 
   log "Writing production .env"
   cat > "$env_file" <<ENV
