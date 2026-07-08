@@ -96,12 +96,12 @@ After the first admin is created, disable or restrict open registration before p
 
 ## Security Notes
 
-- Protected APIs require `Authorization: Bearer <token>`.
+- Protected APIs accept `Authorization: Bearer <token>` and browser sessions use an `httpOnly` auth cookie.
 - SQL queries use parameter placeholders.
 - Service control accepts only whitelisted services and actions.
 - `systemctl` service control is disabled unless `ENABLE_SERVICE_CONTROL=true`.
 - First-user registration is allowed for bootstrap; after that, registration is disabled unless `ALLOW_REGISTRATION=true`.
-- The frontend stores JWTs in `localStorage` as requested. For higher-security deployments, consider short token TTLs and a refresh-token strategy with secure cookies.
+- The frontend no longer stores JWTs in `localStorage`; browser sessions use a signed `httpOnly` cookie. For higher-security deployments, consider CSRF protection and shorter token TTLs.
 
 ## Deployment Path
 

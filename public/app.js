@@ -1,6 +1,3 @@
-const tokenKey = 'ekafy_token';
-const userKey = 'ekafy_user';
-
 const services = ['nginx', 'mysql', 'mariadb', 'apache2'];
 
 let dashboardState = {
@@ -9,26 +6,8 @@ let dashboardState = {
   users: []
 };
 
-function getToken() {
-  return localStorage.getItem(tokenKey);
-}
-
-function getUser() {
-  try {
-    return JSON.parse(localStorage.getItem(userKey));
-  } catch (_error) {
-    return null;
-  }
-}
-
-function setSession({ token, user }) {
-  localStorage.setItem(tokenKey, token);
-  localStorage.setItem(userKey, JSON.stringify(user));
-}
-
 function clearSession() {
-  localStorage.removeItem(tokenKey);
-  localStorage.removeItem(userKey);
+  dashboardState.user = null;
 }
 
 function escapeHtml(value) {
@@ -50,20 +29,18 @@ async function api(path, options = {}) {
     ...(options.headers || {})
   };
 
-  const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   const response = await fetch(path, {
     ...options,
-    headers
+    headers,
+    credentials: 'include'
   });
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || 'Request failed');
+    const error = new Error(data.message || 'Request failed');
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -166,6 +143,10 @@ async function loadProjects() {
     `).join('');
     syncProjectOptions();
   } catch (error) {
+    if (error.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
     grid.innerHTML = `<p class="message">${error.message}</p>`;
   }
 }
@@ -204,6 +185,10 @@ async function loadUsers() {
     `;
     syncUserOptions();
   } catch (error) {
+    if (error.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
     table.innerHTML = `<p class="message">${error.message}</p>`;
   }
 }
@@ -326,10 +311,11 @@ function bootLogin() {
   const form = document.getElementById('loginForm');
   if (!form) return;
 
-  if (getToken()) {
-    window.location.href = '/dashboard.html';
-    return;
-  }
+  api('/api/auth/me')
+    .then(() => {
+      window.location.href = '/dashboard.html';
+    })
+    .catch(() => {});
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -345,7 +331,6 @@ function bootLogin() {
         })
       });
 
-      setSession(data);
       window.location.href = '/dashboard.html';
     } catch (error) {
       message.textContent = error.message;
@@ -353,21 +338,29 @@ function bootLogin() {
   });
 }
 
-function bootDashboard() {
+async function bootDashboard() {
   const dashboard = document.querySelector('.app-shell');
   if (!dashboard) return;
 
-  if (!getToken()) {
+  let session;
+  try {
+    session = await api('/api/auth/me');
+  } catch (error) {
     window.location.href = '/login.html';
     return;
   }
 
-  const user = getUser();
+  const user = session.user;
   dashboardState.user = user;
   document.getElementById('userRole').textContent = user ? `${user.username} - ${user.role}` : 'Control panel';
   setAdminVisibility();
 
-  document.getElementById('logoutButton').addEventListener('click', () => {
+  document.getElementById('logoutButton').addEventListener('click', async () => {
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch (_error) {
+      // Clear the local state and redirect even if logout fails.
+    }
     clearSession();
     window.location.href = '/login.html';
   });
@@ -387,14 +380,19 @@ function bootDashboard() {
   loadProjects();
   loadUsers();
   loadStatus().catch((error) => {
-    if (error.message.includes('token')) {
-      clearSession();
+    if (error.status === 401) {
       window.location.href = '/login.html';
     }
   });
 
   setInterval(() => {
-    loadStatus().catch(console.warn);
+    loadStatus().catch((error) => {
+      if (error.status === 401) {
+        window.location.href = '/login.html';
+      } else {
+        console.warn(error);
+      }
+    });
   }, 5000);
 }
 

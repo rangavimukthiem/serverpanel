@@ -143,6 +143,8 @@ curl http://127.0.0.1:3000/api/system/status \
   -H "Authorization: Bearer JWT_TOKEN_HERE"
 ```
 
+Browser logins also set an `httpOnly` cookie, so the dashboard can stay signed in without storing the JWT in `localStorage`.
+
 ## 5. System Monitoring API
 
 Endpoint:
@@ -411,7 +413,7 @@ Dashboard:
 /dashboard.html
 ```
 
-The frontend stores the JWT token in browser `localStorage`.
+The frontend uses an `httpOnly` auth cookie for browser sessions. API clients can still use Bearer tokens.
 
 Dashboard sections:
 

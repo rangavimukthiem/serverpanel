@@ -1,11 +1,18 @@
 const jwt = require('jsonwebtoken');
 const { findUserById } = require('../models/userModel');
+const AUTH_COOKIE_NAME = 'ekafy_token';
 
 function getToken(req) {
   const header = req.headers.authorization || '';
 
   if (!header.startsWith('Bearer ')) {
-    return null;
+    const cookieHeader = req.headers.cookie || '';
+    const cookieToken = cookieHeader
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${AUTH_COOKIE_NAME}=`));
+
+    return cookieToken ? decodeURIComponent(cookieToken.slice(AUTH_COOKIE_NAME.length + 1)) : null;
   }
 
   return header.slice('Bearer '.length);

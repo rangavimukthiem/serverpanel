@@ -5,6 +5,48 @@ const { createLog } = require('../models/logModel');
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
 const ALLOWED_ROLES = new Set(['admin', 'user']);
+const AUTH_COOKIE_NAME = 'ekafy_token';
+
+function parseDurationMs(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+
+  const match = value.trim().match(/^(\d+)([smhd])$/);
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const multipliers = {
+    s: 1000,
+    m: 60 * 1000,
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000
+  };
+
+  return amount * multipliers[unit];
+}
+
+function getAuthCookieOptions() {
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/'
+  };
+
+  const maxAge = parseDurationMs(process.env.JWT_EXPIRES_IN || '8h');
+  if (maxAge) {
+    cookieOptions.maxAge = maxAge;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    cookieOptions.secure = true;
+  }
+
+  return cookieOptions;
+}
 
 function sanitizeUser(user) {
   return {
@@ -24,6 +66,17 @@ function signToken(user) {
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
   );
+}
+
+function setAuthCookie(res, token) {
+  res.cookie(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+}
+
+function clearAuthCookie(res) {
+  res.clearCookie(AUTH_COOKIE_NAME, {
+    path: '/',
+    sameSite: 'lax'
+  });
 }
 
 async function register(req, res, next) {
@@ -59,6 +112,7 @@ async function register(req, res, next) {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await createUser({ username, passwordHash, role: requestedRole });
     const token = signToken(user);
+    setAuthCookie(res, token);
 
     await createLog({ userId: user.id, action: `registered ${requestedRole} user ${username}` });
 
@@ -91,6 +145,7 @@ async function login(req, res, next) {
     }
 
     const token = signToken(user);
+    setAuthCookie(res, token);
     await createLog({ userId: user.id, action: `logged in as ${username}` });
 
     return res.json({ token, user: sanitizeUser(user) });
@@ -99,7 +154,18 @@ async function login(req, res, next) {
   }
 }
 
+async function me(req, res) {
+  return res.json({ user: sanitizeUser(req.user) });
+}
+
+async function logout(_req, res) {
+  clearAuthCookie(res);
+  return res.json({ message: 'Logged out' });
+}
+
 module.exports = {
   register,
-  login
+  login,
+  me,
+  logout
 };
