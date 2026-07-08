@@ -171,11 +171,18 @@ random_secret() {
   openssl rand -base64 48 | tr -d '\n'
 }
 
+apt_update() {
+  if ! apt-get update; then
+    warn "Retrying apt update after accepting repository metadata changes"
+    apt-get update -o Acquire::AllowReleaseInfoChange::Label=true
+  fi
+}
+
 install_packages() {
   log "Installing system packages"
   export DEBIAN_FRONTEND=noninteractive
 
-  apt-get update
+  apt_update
   apt-get install -y ca-certificates curl gnupg openssl rsync sudo mariadb-server
 
   if ! command -v node >/dev/null 2>&1; then
