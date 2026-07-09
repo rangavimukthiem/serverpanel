@@ -1,24 +1,44 @@
+/**
+ * pages/dashboard.js — Main dashboard bootstrap.
+ *
+ * Wires together all modules: auth, tab routing, services, projects,
+ * project detail drawer, forms, admin, and system status auto-refresh.
+ */
+
 import { api } from '../shared/api.js';
 import { clearSession } from '../shared/auth.js';
 import { dashboardState } from '../dashboard/state.js';
-import { renderServices, runServiceAction, refreshServiceStatuses } from '../dashboard/services.js';
-import { loadProjects } from '../dashboard/projects.js';
+import { loadServices, runServiceAction, refreshServiceStatuses } from '../dashboard/services.js';
+import { loadProjects, bindProjectListClicks } from '../dashboard/projects.js';
 import { loadUsers } from '../dashboard/users.js';
 import { bindAdminForms } from '../dashboard/forms.js';
 import { setupProjectWizard } from '../dashboard/wizard.js';
+import { initProjectDetail } from '../dashboard/projectDetail.js';
 import { loadStatus, handleStatusError } from '../dashboard/status.js';
 
-const dashboardTabs = Array.from(document.querySelectorAll('[data-dashboard-tab]'));
-const dashboardScreens = Array.from(document.querySelectorAll('[data-dashboard-screen]'));
+// ── Tab definitions ───────────────────────────────────────────────────────────
+
+const TABS = ['dashboard', 'services', 'projects', 'access'];
+const TITLE_MAP = {
+  dashboard: ['Dashboard',  'Server overview'],
+  services:  ['Services',   'Systemd service controls'],
+  projects:  ['Projects',   'Deployment workspace'],
+  access:    ['Users',      'Account access']
+};
+
+// ── Admin visibility ──────────────────────────────────────────────────────────
 
 function setAdminVisibility() {
+  const isAdmin = dashboardState.user?.role === 'admin';
   document.querySelectorAll('.admin-only').forEach((node) => {
-    node.hidden = dashboardState.user?.role !== 'admin';
+    node.hidden = !isAdmin;
   });
 }
 
+// ── Tab switching ─────────────────────────────────────────────────────────────
+
 function normalizeDashboardTab(value) {
-  return ['dashboard', 'services', 'projects', 'access'].includes(value) ? value : 'dashboard';
+  return TABS.includes(value) ? value : 'dashboard';
 }
 
 function syncDashboardTabState() {
@@ -29,55 +49,35 @@ function syncDashboardTabState() {
     activeTab = 'dashboard';
   }
 
-  dashboardTabs.forEach((tab) => {
+  document.querySelectorAll('[data-dashboard-tab]').forEach((tab) => {
     const isActive = tab.dataset.dashboardTab === activeTab;
     tab.classList.toggle('active', isActive);
     tab.setAttribute('aria-selected', String(isActive));
-    tab.tabIndex = isActive ? 0 : -1;
   });
 
-  dashboardScreens.forEach((screen) => {
-    const isVisible = screen.dataset.dashboardScreen === activeTab;
-    screen.hidden = !isVisible;
+  document.querySelectorAll('[data-dashboard-screen]').forEach((screen) => {
+    screen.hidden = screen.dataset.dashboardScreen !== activeTab;
   });
 
-  const topbarTitle = document.querySelector('.topbar h2');
-  const topbarEyebrow = document.querySelector('.topbar .eyebrow');
-  const titleMap = {
-    dashboard: 'Dashboard',
-    services: 'Services',
-    projects: 'Projects',
-    access: 'Users'
-  };
-  const eyebrowMap = {
-    dashboard: 'Server overview',
-    services: 'Service controls',
-    projects: 'Deployment workspace',
-    access: 'Account access'
-  };
+  const [title, eyebrow] = TITLE_MAP[activeTab] || ['Dashboard', ''];
+  const titleEl   = document.getElementById('topbarTitle');
+  const eyebrowEl = document.getElementById('topbarEyebrow');
+  if (titleEl)   titleEl.textContent   = title;
+  if (eyebrowEl) eyebrowEl.textContent = eyebrow;
 
-  if (topbarTitle) {
-    topbarTitle.textContent = titleMap[activeTab];
-  }
-
-  if (topbarEyebrow) {
-    topbarEyebrow.textContent = eyebrowMap[activeTab];
-  }
-
-  const accessTab = document.querySelector('[data-dashboard-tab="access"]');
-  if (accessTab) {
-    accessTab.hidden = dashboardState.user?.role !== 'admin';
-  }
+  // Load content when switching to these tabs
+  if (activeTab === 'services')  loadServices();
+  if (activeTab === 'projects')  loadProjects();
+  if (activeTab === 'access')    { loadUsers(); }
 }
 
-async function bootDashboard() {
-  const dashboard = document.querySelector('.app-shell');
-  if (!dashboard) return;
+// ── Boot ──────────────────────────────────────────────────────────────────────
 
+async function bootDashboard() {
   let session;
   try {
     session = await api('/api/auth/me');
-  } catch (_error) {
+  } catch (_) {
     window.location.href = '/login.html';
     return;
   }
@@ -85,64 +85,56 @@ async function bootDashboard() {
   const user = session.user;
   dashboardState.user = user;
 
-  const userRole = document.getElementById('userRole');
-  if (userRole) {
-    userRole.textContent = user ? `${user.username} - ${user.role}` : 'Control panel';
-  }
+  const userRoleEl = document.getElementById('userRole');
+  if (userRoleEl) userRoleEl.textContent = `${user.username} · ${user.role}`;
 
   setAdminVisibility();
 
-  const logoutButton = document.getElementById('logoutButton');
-  if (logoutButton) {
-    logoutButton.addEventListener('click', async () => {
-      try {
-        await api('/api/auth/logout', { method: 'POST' });
-      } catch (_error) {
-        // Clear the local state and redirect even if logout fails.
-      }
+  // Logout
+  const logoutBtn = document.getElementById('logoutButton');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try { await api('/api/auth/logout', { method: 'POST' }); } catch (_) {}
       clearSession(dashboardState);
       window.location.href = '/login.html';
     });
   }
 
-  const refreshButton = document.getElementById('refreshStatusButton');
-  if (refreshButton) {
-    refreshButton.addEventListener('click', () => {
-      refreshServiceStatuses();
-    });
+  // Services refresh button
+  const refreshBtn = document.getElementById('refreshStatusButton');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => { loadServices(); refreshServiceStatuses(); });
   }
 
+  // Services action delegation
   const servicesGrid = document.getElementById('servicesGrid');
   if (servicesGrid) {
-    servicesGrid.addEventListener('click', (event) => {
-      const button = event.target.closest('button[data-service][data-action]');
-      if (!button) return;
-      runServiceAction(button.dataset.service, button.dataset.action);
+    servicesGrid.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-service][data-action]');
+      if (btn) runServiceAction(btn.dataset.service, btn.dataset.action);
     });
   }
 
-  renderServices();
-  bindAdminForms();
-  setupProjectWizard();
-  loadProjects();
-  loadUsers();
+  // ── Init modules ────────────────────────────────────────────────────────────
+  setupProjectWizard();   // Wizard preset/endpoint behaviour in the create modal
+  bindProjectListClicks(); // Project card → detail drawer
+  initProjectDetail();    // Detail drawer tabs and content
+  bindAdminForms();       // User + project create + member forms
 
-  loadStatus().catch((error) => {
-    handleStatusError(error, 'Loading system status');
-  });
+  // Initial data load
+  await loadProjects();
+  if (user.role === 'admin') loadUsers();
 
+  // System metrics loop
+  loadStatus().catch((e) => handleStatusError(e, 'Loading system status'));
   setInterval(() => {
-    loadStatus().catch((error) => {
-      handleStatusError(error, 'Refreshing system status');
-    });
+    loadStatus().catch((e) => handleStatusError(e, 'Refreshing system status'));
   }, 5000);
 
+  // Tab routing
   syncDashboardTabState();
   window.addEventListener('hashchange', syncDashboardTabState);
-
-  if (!window.location.hash) {
-    window.location.hash = '#dashboard';
-  }
+  if (!window.location.hash) window.location.hash = '#dashboard';
 }
 
 bootDashboard();

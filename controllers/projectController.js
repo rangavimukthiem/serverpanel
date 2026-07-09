@@ -180,7 +180,7 @@ async function listProjects(req, res, next) {
 
 async function createManagedProject(req, res, next) {
   try {
-    const { name, slug, path, status = 'active' } = req.body;
+    const { name, slug, path, status = 'active', domain, port, gitRepoUrl, gitBranch = 'main' } = req.body;
     const projectConfig = buildProjectConfig(req.body.config || req.body);
 
     if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 120) {
@@ -191,8 +191,8 @@ async function createManagedProject(req, res, next) {
       return res.status(400).json({ message: 'Slug must be lowercase letters, numbers, and dashes' });
     }
 
-    if (typeof path !== 'string' || !path.startsWith('/srv/') || path.length > 255) {
-      return res.status(400).json({ message: 'Project path must be an absolute /srv path' });
+    if (typeof path !== 'string' || !path.startsWith('/') || path.length > 255) {
+      return res.status(400).json({ message: 'Project path must be an absolute path (starting with /)' });
     }
 
     const configError = validateProjectConfig(projectConfig);
@@ -205,7 +205,11 @@ async function createManagedProject(req, res, next) {
       slug,
       path,
       status,
-      config: projectConfig
+      config: projectConfig,
+      domain:     domain     ? String(domain).trim()     : null,
+      port:       port       ? Number(port)              : null,
+      gitRepoUrl: gitRepoUrl ? String(gitRepoUrl).trim() : null,
+      gitBranch:  gitBranch  ? String(gitBranch).trim()  : 'main'
     });
 
     await createLog({

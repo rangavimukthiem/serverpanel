@@ -1,130 +1,160 @@
+/**
+ * forms.js — Admin form bindings: user creation, project creation (via modal),
+ * and project member assignment.
+ */
+
 import { api } from '../shared/api.js';
 import { reportGlobalError } from '../shared/errors.js';
 import { redirectOnAuthError } from '../shared/auth.js';
 import { loadProjects } from './projects.js';
 import { loadUsers } from './users.js';
-import { resetProjectWizard, readProjectWizardConfig, renderWizardPreview } from './wizard.js';
+import { resetProjectWizard, readProjectWizardConfig } from './wizard.js';
+
+// ── Project modal ─────────────────────────────────────────────────────────────
+
+export function openNewProjectModal() {
+  const modal = document.getElementById('newProjectModal');
+  if (modal) modal.hidden = false;
+}
+
+export function closeNewProjectModal() {
+  const modal = document.getElementById('newProjectModal');
+  if (modal) modal.hidden = true;
+}
+
+// ── Main form binder ──────────────────────────────────────────────────────────
 
 export function bindAdminForms() {
-  const userForm = document.getElementById('userForm');
-  const projectForm = document.getElementById('projectForm');
-  const memberForm = document.getElementById('memberForm');
+  bindUserForm();
+  bindProjectForm();
+  bindMemberForm();
+  bindProjectModalTriggers();
+}
+
+function bindProjectModalTriggers() {
+  const newBtn    = document.getElementById('newProjectButton');
+  const closeBtn  = document.getElementById('closeModal');
+  const cancelBtn = document.getElementById('cancelCreateProject');
+
+  if (newBtn)    newBtn.addEventListener('click', openNewProjectModal);
+  if (closeBtn)  closeBtn.addEventListener('click', closeNewProjectModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeNewProjectModal);
+
+  // Close modal on overlay click
+  const modal = document.getElementById('newProjectModal');
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeNewProjectModal();
+    });
+  }
+}
+
+function bindUserForm() {
+  const form    = document.getElementById('userForm');
   const message = document.getElementById('accessMessage');
-  const usersTable = document.getElementById('usersTable');
-  const wizardPreview = document.getElementById('projectWizardPreview');
+  if (!form) return;
 
-  const setMessage = (value) => {
-    if (message) {
-      message.textContent = value;
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (message) message.textContent = 'Creating user…';
+    try {
+      await api('/api/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          username: form.username.value.trim(),
+          password: form.password.value,
+          role:     form.role.value
+        })
+      });
+      form.reset();
+      if (message) message.textContent = 'User created.';
+      await loadUsers();
+    } catch (error) {
+      if (redirectOnAuthError(error)) return;
+      reportGlobalError(error, 'Creating user');
+      if (message) message.textContent = error.message;
     }
-  };
+  });
+}
 
-  if (userForm) {
-    userForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setMessage('Creating user...');
+function bindProjectForm() {
+  const form = document.getElementById('projectForm');
+  if (!form) return;
 
-      try {
-        await api('/api/users', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: userForm.username.value.trim(),
-            password: userForm.password.value,
-            role: userForm.role.value
-          })
-        });
-        userForm.reset();
-        setMessage('User created');
-        await loadUsers();
-      } catch (error) {
-        if (redirectOnAuthError(error)) {
-          return;
-        }
-        reportGlobalError(error, 'Creating user');
-        setMessage(error.message);
-      }
-    });
-  }
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = form.querySelector('[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
 
-  if (projectForm) {
-    projectForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setMessage('Creating project...');
+    try {
+      const config = readProjectWizardConfig();
+      await api('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+          name:       form.name.value.trim(),
+          slug:       form.slug.value.trim(),
+          path:       form.path.value.trim(),
+          domain:     form.domain?.value.trim() || undefined,
+          port:       form.port?.value ? Number(form.port.value) : undefined,
+          gitRepoUrl: form.gitRepoUrl?.value.trim() || undefined,
+          gitBranch:  form.gitBranch?.value.trim()  || 'main',
+          config
+        })
+      });
+      resetProjectWizard();
+      closeNewProjectModal();
+      await loadProjects();
+    } catch (error) {
+      if (redirectOnAuthError(error)) return;
+      reportGlobalError(error, 'Creating project');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  });
+}
 
-      try {
-        const config = readProjectWizardConfig();
-        const data = await api('/api/projects', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: projectForm.name.value.trim(),
-            slug: projectForm.slug.value.trim(),
-            path: projectForm.path.value.trim(),
-            config
-          })
-        });
-        resetProjectWizard();
-        if (wizardPreview) {
-          renderWizardPreview(wizardPreview, data.wizard);
-        }
-        setMessage('Project created');
-        await loadProjects();
-      } catch (error) {
-        if (redirectOnAuthError(error)) {
-          return;
-        }
-        reportGlobalError(error, 'Creating project');
-        setMessage(error.message);
-      }
-    });
-  }
+function bindMemberForm() {
+  const form    = document.getElementById('memberForm');
+  const message = document.getElementById('accessMessage');
+  if (!form) return;
 
-  if (memberForm) {
-    memberForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      setMessage('Saving project member...');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (message) message.textContent = 'Saving…';
+    try {
+      await api(`/api/projects/${form.projectId.value}/members`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          userId: Number(form.userId.value),
+          role:   form.role.value
+        })
+      });
+      form.reset();
+      if (message) message.textContent = 'Member saved.';
+      await Promise.all([loadProjects(), loadUsers()]);
+    } catch (error) {
+      if (redirectOnAuthError(error)) return;
+      reportGlobalError(error, 'Saving member');
+      if (message) message.textContent = error.message;
+    }
+  });
 
-      try {
-        await api(`/api/projects/${memberForm.projectId.value}/members`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            userId: Number(memberForm.userId.value),
-            role: memberForm.role.value
-          })
-        });
-        memberForm.reset();
-        setMessage('Project member saved');
-        await Promise.all([loadProjects(), loadUsers()]);
-      } catch (error) {
-        if (redirectOnAuthError(error)) {
-          return;
-        }
-        reportGlobalError(error, 'Saving project member');
-        setMessage(error.message);
-      }
-    });
-  }
-
+  // Delete user
+  const usersTable = document.getElementById('usersTable');
   if (usersTable) {
-    usersTable.addEventListener('click', async (event) => {
-      const button = event.target.closest('button[data-user-delete]');
-      if (!button) return;
-
-      const userId = button.dataset.userDelete;
-      const confirmed = window.confirm('Remove this user from EKAFY? This will delete their account and project access.');
-      if (!confirmed) return;
-
-      setMessage('Removing user...');
-
+    usersTable.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-user-delete]');
+      if (!btn) return;
+      if (!window.confirm('Delete this user? This removes their account and all project access.')) return;
+      if (message) message.textContent = 'Removing…';
       try {
-        await api(`/api/users/${userId}`, { method: 'DELETE' });
-        setMessage('User removed');
+        await api(`/api/users/${btn.dataset.userDelete}`, { method: 'DELETE' });
+        if (message) message.textContent = 'User removed.';
         await loadUsers();
       } catch (error) {
-        if (redirectOnAuthError(error)) {
-          return;
-        }
+        if (redirectOnAuthError(error)) return;
         reportGlobalError(error, 'Removing user');
-        setMessage(error.message);
+        if (message) message.textContent = error.message;
       }
     });
   }
