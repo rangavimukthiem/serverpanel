@@ -239,11 +239,19 @@ select:focus {
   padding: 24px;
 }
 
+.tab-list,
 .nav-list {
   display: grid;
   gap: 8px;
 }
 
+.tab-list {
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.tab-link,
 .nav-list a,
 .ghost-button {
   background: transparent;
@@ -256,12 +264,19 @@ select:focus {
   text-align: left;
 }
 
+.tab-link[aria-selected="true"],
+.tab-link.active,
+.tab-link:hover,
 .nav-list a.active,
 .nav-list a:hover,
 .ghost-button:hover {
   background: var(--panel-soft);
   border-color: var(--line);
   color: var(--text);
+}
+
+.tab-link {
+  text-align: center;
 }
 
 .ghost-button {
@@ -351,6 +366,10 @@ select:focus {
   display: grid;
   gap: 18px;
   padding: 20px;
+}
+
+[data-dashboard-screen][hidden] {
+  display: none;
 }
 
 .service-card {
@@ -576,6 +595,10 @@ select:focus {
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .tab-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -607,6 +630,10 @@ select:focus {
   }
 
   .inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-list {
     grid-template-columns: 1fr;
   }
 }

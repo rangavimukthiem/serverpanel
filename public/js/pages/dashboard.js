@@ -8,10 +8,66 @@ import { bindAdminForms } from '../dashboard/forms.js';
 import { setupProjectWizard } from '../dashboard/wizard.js';
 import { loadStatus, handleStatusError } from '../dashboard/status.js';
 
+const dashboardTabs = Array.from(document.querySelectorAll('[data-dashboard-tab]'));
+const dashboardScreens = Array.from(document.querySelectorAll('[data-dashboard-screen]'));
+
 function setAdminVisibility() {
   document.querySelectorAll('.admin-only').forEach((node) => {
     node.hidden = dashboardState.user?.role !== 'admin';
   });
+}
+
+function normalizeDashboardTab(value) {
+  return ['dashboard', 'services', 'projects', 'access'].includes(value) ? value : 'dashboard';
+}
+
+function syncDashboardTabState() {
+  let activeTab = normalizeDashboardTab(window.location.hash.replace('#', '') || 'dashboard');
+
+  if (activeTab === 'access' && dashboardState.user?.role !== 'admin') {
+    window.location.hash = '#dashboard';
+    activeTab = 'dashboard';
+  }
+
+  dashboardTabs.forEach((tab) => {
+    const isActive = tab.dataset.dashboardTab === activeTab;
+    tab.classList.toggle('active', isActive);
+    tab.setAttribute('aria-selected', String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
+  });
+
+  dashboardScreens.forEach((screen) => {
+    const isVisible = screen.dataset.dashboardScreen === activeTab;
+    screen.hidden = !isVisible;
+  });
+
+  const topbarTitle = document.querySelector('.topbar h2');
+  const topbarEyebrow = document.querySelector('.topbar .eyebrow');
+  const titleMap = {
+    dashboard: 'Dashboard',
+    services: 'Services',
+    projects: 'Projects',
+    access: 'Users'
+  };
+  const eyebrowMap = {
+    dashboard: 'Server overview',
+    services: 'Service controls',
+    projects: 'Deployment workspace',
+    access: 'Account access'
+  };
+
+  if (topbarTitle) {
+    topbarTitle.textContent = titleMap[activeTab];
+  }
+
+  if (topbarEyebrow) {
+    topbarEyebrow.textContent = eyebrowMap[activeTab];
+  }
+
+  const accessTab = document.querySelector('[data-dashboard-tab="access"]');
+  if (accessTab) {
+    accessTab.hidden = dashboardState.user?.role !== 'admin';
+  }
 }
 
 async function bootDashboard() {
@@ -80,6 +136,13 @@ async function bootDashboard() {
       handleStatusError(error, 'Refreshing system status');
     });
   }, 5000);
+
+  syncDashboardTabState();
+  window.addEventListener('hashchange', syncDashboardTabState);
+
+  if (!window.location.hash) {
+    window.location.hash = '#dashboard';
+  }
 }
 
 bootDashboard();

@@ -33,11 +33,11 @@
           <div class="refresh-pill">Auto refresh: 5s</div>
         </header>
 
-        <nav class="tab-list" aria-label="Dashboard screens">
-          <a class="tab-link" href="#dashboard" data-dashboard-tab="dashboard">Dashboard</a>
-          <a class="tab-link" href="#services" data-dashboard-tab="services">Services</a>
-          <a class="tab-link" href="#projects" data-dashboard-tab="projects">Projects</a>
-          <a class="tab-link" href="#access" data-dashboard-tab="access">Users</a>
+        <nav class="tab-list" aria-label="Dashboard screens" role="tablist">
+          <a class="tab-link" href="#dashboard" role="tab" aria-controls="dashboard" data-dashboard-tab="dashboard">Dashboard</a>
+          <a class="tab-link" href="#services" role="tab" aria-controls="services" data-dashboard-tab="services">Services</a>
+          <a class="tab-link" href="#projects" role="tab" aria-controls="projects" data-dashboard-tab="projects">Projects</a>
+          <a class="tab-link" href="#access" role="tab" aria-controls="access" data-dashboard-tab="access">Users</a>
         </nav>
 
         <section id="dashboard" class="panel-section" data-dashboard-screen="dashboard">
