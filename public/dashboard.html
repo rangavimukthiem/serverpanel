@@ -320,106 +320,6 @@
               </div>
             </div><!-- /project-detail -->
           </div><!-- /projects-layout -->
-
-          <!-- ── New Project Modal ──────────────────────────────────── -->
-          <div id="newProjectModal" class="modal-overlay" hidden>
-            <div class="modal-panel">
-              <div class="modal-header">
-                <div>
-                  <p class="eyebrow">New deployment</p>
-                  <h3>Create Project</h3>
-                </div>
-                <button id="closeModal" class="ghost-button modal-close" type="button">✕</button>
-              </div>
-
-              <form id="projectForm" class="project-wizard">
-                <!-- Basics -->
-                <div class="wizard-section">
-                  <div class="wizard-heading">
-                    <h4>Project Basics</h4>
-                    <p>Name, slug, and deployment path.</p>
-                  </div>
-                  <div class="inline-form inline-form-3">
-                    <input name="name"   type="text" placeholder="Project name"      required minlength="2">
-                    <input name="slug"   type="text" placeholder="project-slug"      required pattern="[a-z0-9][a-z0-9-]{1,78}[a-z0-9]">
-                    <input name="path"   type="text" placeholder="/srv/my-project"   required>
-                  </div>
-                </div>
-
-                <!-- Domain + Port + Git -->
-                <div class="wizard-section">
-                  <div class="wizard-heading">
-                    <h4>Hosting &amp; Git</h4>
-                    <p>Domain, app port, and GitHub/GitLab repo URL.</p>
-                  </div>
-                  <div class="inline-form wizard-stack">
-                    <input name="domain"     type="text"   placeholder="app.example.com (optional)">
-                    <input name="port"       type="number" placeholder="App port (e.g. 4001)" min="1024" max="65535">
-                    <input name="gitRepoUrl" type="text"   placeholder="git@github.com:user/repo.git (optional)">
-                    <input name="gitBranch"  type="text"   placeholder="Branch (default: main)" value="main">
-                  </div>
-                </div>
-
-                <!-- Project type -->
-                <div class="wizard-section">
-                  <div class="wizard-heading">
-                    <h4>Project Type</h4>
-                    <p>Choose which modules the wizard should prepare.</p>
-                  </div>
-                  <select name="kind" required>
-                    <option value="static">Static project</option>
-                    <option value="database">Database-backed project</option>
-                    <option value="api">API-backed project</option>
-                    <option value="full">Full-stack project</option>
-                  </select>
-                </div>
-
-                <!-- DB + API wizard panels -->
-                <div class="wizard-section wizard-grid-2">
-                  <fieldset class="wizard-card database-wizard">
-                    <legend>Database Wizard</legend>
-                    <p class="wizard-note">Configure the database connection details.</p>
-                    <div class="inline-form wizard-stack">
-                      <select name="database.provider">
-                        <option value="mariadb">MariaDB</option>
-                        <option value="mysql">MySQL</option>
-                      </select>
-                      <input name="database.host"         type="text"   placeholder="DB host"       value="127.0.0.1">
-                      <input name="database.port"         type="number" placeholder="DB port"       value="3306">
-                      <input name="database.databaseName" type="text"   placeholder="Database name">
-                      <input name="database.username"     type="text"   placeholder="Database user">
-                    </div>
-                    <div class="preset-row" data-query-preset-row></div>
-                  </fieldset>
-
-                  <fieldset class="wizard-card api-wizard">
-                    <legend>API Wizard</legend>
-                    <p class="wizard-note">Define required endpoints up-front.</p>
-                    <div class="inline-form wizard-stack">
-                      <input name="api.baseUrl" type="url" placeholder="https://api.example.com">
-                    </div>
-                    <div class="preset-row" data-endpoint-preset-row></div>
-                    <div class="endpoint-list" data-endpoint-list></div>
-                    <button class="ghost-button" type="button" data-add-endpoint>+ Endpoint</button>
-                  </fieldset>
-                </div>
-
-                <!-- Notes -->
-                <div class="wizard-section">
-                  <div class="wizard-heading">
-                    <h4>Notes</h4>
-                    <p>Optional deployment or schema notes.</p>
-                  </div>
-                  <textarea name="notes" rows="3" placeholder="Optional notes…"></textarea>
-                </div>
-
-                <div class="modal-actions">
-                  <button type="submit">Create Project</button>
-                  <button type="button" id="cancelCreateProject" class="ghost-button">Cancel</button>
-                </div>
-              </form>
-            </div>
-          </div>
         </section>
 
         <!-- ── Users tab ──────────────────────────────────────────────── -->
@@ -462,6 +362,104 @@
           <p id="accessMessage" class="message" role="status"></p>
         </section>
       </main>
+    </div>
+
+    <!-- ── New Project Modal (outside app-shell to avoid z-index / stacking-context issues) ── -->
+    <div id="newProjectModal" class="modal-overlay" hidden>
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">New deployment</p>
+            <h3>Create Project</h3>
+          </div>
+          <button id="closeModal" class="ghost-button modal-close" type="button">✕</button>
+        </div>
+
+        <form id="projectForm" class="project-wizard">
+          <!-- Basics -->
+          <div class="wizard-section">
+            <div class="wizard-heading">
+              <h4>Project Basics</h4>
+              <p>Name, slug, and deployment path.</p>
+            </div>
+            <div class="wizard-form-grid">
+              <input name="name" type="text" placeholder="Project name" required minlength="2">
+              <input name="slug" type="text" placeholder="project-slug" required pattern="[a-z0-9][a-z0-9-]{1,78}[a-z0-9]">
+              <input name="path" type="text" placeholder="/srv/my-project" required>
+            </div>
+          </div>
+
+          <!-- Domain + Port + Git -->
+          <div class="wizard-section">
+            <div class="wizard-heading">
+              <h4>Hosting &amp; Git</h4>
+              <p>Domain, app port, and GitHub/GitLab repo URL.</p>
+            </div>
+            <div class="wizard-form-grid">
+              <input name="domain"     type="text"   placeholder="app.example.com (optional)">
+              <input name="port"       type="number" placeholder="App port (e.g. 4001)" min="1024" max="65535">
+              <input name="gitRepoUrl" type="text"   placeholder="git@github.com:user/repo.git (optional)">
+              <input name="gitBranch"  type="text"   placeholder="Branch (default: main)" value="main">
+            </div>
+          </div>
+
+          <!-- Project type -->
+          <div class="wizard-section">
+            <div class="wizard-heading">
+              <h4>Project Type</h4>
+              <p>Choose which modules the wizard should prepare.</p>
+            </div>
+            <select name="kind" required>
+              <option value="static">Static project</option>
+              <option value="database">Database-backed project</option>
+              <option value="api">API-backed project</option>
+              <option value="full">Full-stack project</option>
+            </select>
+          </div>
+
+          <!-- DB + API wizard panels -->
+          <div class="wizard-section">
+            <fieldset class="wizard-card database-wizard">
+              <legend>Database Wizard</legend>
+              <p class="wizard-note">Configure the database connection details.</p>
+              <div class="wizard-form-grid">
+                <select name="database.provider">
+                  <option value="mariadb">MariaDB</option>
+                  <option value="mysql">MySQL</option>
+                </select>
+                <input name="database.host"         type="text"   placeholder="DB host" value="127.0.0.1">
+                <input name="database.port"         type="number" placeholder="DB port" value="3306">
+                <input name="database.databaseName" type="text"   placeholder="Database name">
+                <input name="database.username"     type="text"   placeholder="Database user">
+              </div>
+              <div class="preset-row" data-query-preset-row></div>
+            </fieldset>
+
+            <fieldset class="wizard-card api-wizard" style="margin-top:14px">
+              <legend>API Wizard</legend>
+              <p class="wizard-note">Define required endpoints up-front.</p>
+              <input name="api.baseUrl" type="url" placeholder="https://api.example.com" style="width:100%">
+              <div class="preset-row" data-endpoint-preset-row style="margin-top:10px"></div>
+              <div class="endpoint-list" data-endpoint-list style="margin-top:8px"></div>
+              <button class="ghost-button" type="button" data-add-endpoint style="margin-top:8px">+ Endpoint</button>
+            </fieldset>
+          </div>
+
+          <!-- Notes -->
+          <div class="wizard-section">
+            <div class="wizard-heading">
+              <h4>Notes</h4>
+              <p>Optional deployment or schema notes.</p>
+            </div>
+            <textarea name="notes" rows="3" placeholder="Optional notes…"></textarea>
+          </div>
+
+          <div class="modal-actions">
+            <button type="submit">Create Project</button>
+            <button type="button" id="cancelCreateProject" class="ghost-button">Cancel</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script type="module" src="/js/pages/dashboard.js"></script>
