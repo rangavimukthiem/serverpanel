@@ -387,6 +387,11 @@ select:focus {
   color: #30030a;
 }
 
+.danger-button {
+  background: var(--danger);
+  color: #30030a;
+}
+
 .service-actions .restart {
   background: var(--warning);
   color: #2d2100;
@@ -401,6 +406,120 @@ select:focus {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.inline-form-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.project-wizard {
+  display: grid;
+  gap: 16px;
+}
+
+.wizard-section {
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.wizard-heading h4,
+.wizard-card legend {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.wizard-heading p,
+.wizard-note {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.wizard-grid-2 {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wizard-card {
+  background: rgba(15, 20, 27, 0.7);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.wizard-card legend {
+  padding: 0 8px;
+}
+
+.wizard-stack {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preset-row,
+.endpoint-list {
+  display: grid;
+  gap: 10px;
+}
+
+.preset-row {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.preset-button {
+  background: var(--panel-soft);
+  color: var(--text);
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.preset-button.is-active {
+  background: rgba(45, 212, 191, 0.18);
+  border: 1px solid rgba(45, 212, 191, 0.35);
+}
+
+.endpoint-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.1fr 120px 1.2fr 1.4fr 36px;
+}
+
+.endpoint-row .danger-button {
+  min-height: 42px;
+  padding: 0 10px;
+}
+
+.wizard-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.wizard-preview pre {
+  background: #0f141b;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  overflow-x: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.wizard-preview-block {
+  display: grid;
+  gap: 8px;
+}
+
+.wizard-preview h4 {
+  font-size: 16px;
+  margin: 0;
 }
 
 .table-panel {
@@ -463,6 +582,13 @@ select:focus {
   .global-message-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .wizard-grid-2,
+  .wizard-stack,
+  .inline-form-3,
+  .endpoint-row {
+    grid-template-columns: 1fr;
   }
 
   .content,

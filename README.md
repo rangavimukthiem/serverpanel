@@ -13,6 +13,7 @@ For command-by-command usage, API examples, service controls, database commands,
 - Login rate limiting
 - Admin user management
 - Project membership with project-specific `manager` and `user` roles
+- Project wizard for database-backed, API-backed, and full-stack project setup
 - System status endpoint at `GET /api/system/status`
 - Whitelisted service control at `POST /api/services/:name/:action`
 - Vanilla dashboard with auto-refreshing metrics
@@ -100,6 +101,7 @@ After the first admin is created, disable or restrict open registration before p
 - Protected APIs accept `Authorization: Bearer <token>` and browser sessions use an `httpOnly` auth cookie.
 - SQL queries use parameter placeholders.
 - Service control accepts only whitelisted services and actions.
+- Project wizard settings are stored in the project config JSON and generate safe SQL/API templates instead of executing raw user input.
 - `systemctl` service control is disabled unless `ENABLE_SERVICE_CONTROL=true`.
 - First-user registration is allowed for bootstrap; after that, registration is disabled unless `ALLOW_REGISTRATION=true`.
 - The frontend no longer stores JWTs in `localStorage`; browser sessions use a signed `httpOnly` cookie. For higher-security deployments, consider CSRF protection and shorter token TTLs.

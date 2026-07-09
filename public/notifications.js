@@ -19,7 +19,7 @@ function ensureGlobalMessageBar() {
     bar.setAttribute('aria-live', 'polite');
     bar.innerHTML = `
       <span class="global-message-text"></span>
-      <button type="button" class="global-message-close" aria-label="Dismiss message">×</button>
+      <button type="button" class="global-message-close" aria-label="Dismiss message">&times;</button>
     `;
     document.body.prepend(bar);
   }

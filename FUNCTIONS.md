@@ -426,6 +426,8 @@ Projects
 User Management
 ```
 
+Projects now include a wizard-style setup for database-backed, API-backed, and full-stack deployments. The wizard stores config in the project record and generates safe SQL/API templates instead of executing arbitrary commands.
+
 Only global admins see the User Management controls.
 
 ## 13. Updating EKAFY

@@ -9,7 +9,7 @@
   <body>
     <div id="globalMessageBar" class="global-message-bar" role="status" aria-live="polite" hidden>
       <span class="global-message-text"></span>
-      <button type="button" class="global-message-close" aria-label="Dismiss message">×</button>
+      <button type="button" class="global-message-close" aria-label="Dismiss message">&times;</button>
     </div>
     <div class="app-shell">
       <aside class="sidebar">
@@ -83,12 +83,73 @@
               <h3>Projects</h3>
             </div>
           </div>
-          <form id="projectForm" class="inline-form admin-only">
-            <input name="name" type="text" placeholder="Project name" required minlength="2">
-            <input name="slug" type="text" placeholder="project-slug" required pattern="[a-z0-9][a-z0-9-]{1,78}[a-z0-9]">
-            <input name="path" type="text" placeholder="/srv/my-project" required>
-            <button type="submit">Add Project</button>
+          <form id="projectForm" class="project-wizard admin-only">
+            <div class="wizard-section">
+              <div class="wizard-heading">
+                <h4>Project Basics</h4>
+                <p>Name, slug, and deployment path.</p>
+              </div>
+              <div class="inline-form inline-form-3">
+                <input name="name" type="text" placeholder="Project name" required minlength="2">
+                <input name="slug" type="text" placeholder="project-slug" required pattern="[a-z0-9][a-z0-9-]{1,78}[a-z0-9]">
+                <input name="path" type="text" placeholder="/srv/my-project" required>
+              </div>
+            </div>
+
+            <div class="wizard-section">
+              <div class="wizard-heading">
+                <h4>Project Type</h4>
+                <p>Choose which modules the wizard should prepare.</p>
+              </div>
+              <select name="kind" required>
+                <option value="static">Static project</option>
+                <option value="database">Database-backed project</option>
+                <option value="api">API-backed project</option>
+                <option value="full">Full stack project</option>
+              </select>
+            </div>
+
+            <div class="wizard-section wizard-grid-2">
+              <fieldset class="wizard-card database-wizard">
+                <legend>Database Wizard</legend>
+                <p class="wizard-note">Generate SQL for creating the database, user, and grants.</p>
+                <div class="inline-form wizard-stack">
+                  <select name="database.provider">
+                    <option value="mariadb">MariaDB</option>
+                    <option value="mysql">MySQL</option>
+                  </select>
+                  <input name="database.host" type="text" placeholder="DB host" value="127.0.0.1">
+                  <input name="database.port" type="number" placeholder="DB port" value="3306">
+                  <input name="database.databaseName" type="text" placeholder="Database name">
+                  <input name="database.username" type="text" placeholder="Database user">
+                  <input name="database.password" type="password" placeholder="Password for SQL preview">
+                </div>
+                <div class="preset-row" data-query-preset-row></div>
+              </fieldset>
+
+              <fieldset class="wizard-card api-wizard">
+                <legend>API Wizard</legend>
+                <p class="wizard-note">Capture required endpoints and add more as needed.</p>
+                <div class="inline-form wizard-stack">
+                  <input name="api.baseUrl" type="url" placeholder="https://api.example.com">
+                </div>
+                <div class="preset-row" data-endpoint-preset-row></div>
+                <div class="endpoint-list" data-endpoint-list></div>
+                <button class="ghost-button" type="button" data-add-endpoint>Add Endpoint</button>
+              </fieldset>
+            </div>
+
+            <div class="wizard-section">
+              <div class="wizard-heading">
+                <h4>Notes</h4>
+                <p>Optional deployment or schema notes.</p>
+              </div>
+              <textarea name="notes" rows="4" placeholder="Optional notes about this project"></textarea>
+            </div>
+
+            <button type="submit">Create Project</button>
           </form>
+          <div id="projectWizardPreview" class="wizard-preview"></div>
           <div id="projectsGrid" class="project-grid"></div>
         </section>
 

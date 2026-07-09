@@ -1,5 +1,76 @@
 const { query } = require('../config/db');
 
+const DEFAULT_PROJECT_CONFIG = {
+  kind: 'static',
+  database: {
+    enabled: false,
+    provider: 'mariadb',
+    host: '127.0.0.1',
+    port: 3306,
+    databaseName: '',
+    username: '',
+    charset: 'utf8mb4'
+  },
+  api: {
+    enabled: false,
+    baseUrl: '',
+    endpoints: []
+  },
+  queryPresets: [],
+  notes: ''
+};
+
+function cloneDefaultConfig() {
+  return JSON.parse(JSON.stringify(DEFAULT_PROJECT_CONFIG));
+}
+
+function parseProjectConfig(rawConfig) {
+  if (!rawConfig) {
+    return cloneDefaultConfig();
+  }
+
+  try {
+    const parsed = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
+    const defaults = cloneDefaultConfig();
+
+    return {
+      ...defaults,
+      ...parsed,
+      database: {
+        ...defaults.database,
+        ...(parsed.database || {})
+      },
+      api: {
+        ...defaults.api,
+        ...(parsed.api || {}),
+        endpoints: Array.isArray(parsed.api?.endpoints) ? parsed.api.endpoints : []
+      },
+      queryPresets: Array.isArray(parsed.queryPresets) ? parsed.queryPresets : [],
+      notes: typeof parsed.notes === 'string' ? parsed.notes : ''
+    };
+  } catch (_error) {
+    return cloneDefaultConfig();
+  }
+}
+
+function serializeProjectConfig(config) {
+  return JSON.stringify(parseProjectConfig(config));
+}
+
+async function ensureProjectSchema() {
+  const rows = await query(`
+    SELECT COUNT(*) AS total
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'projects'
+      AND COLUMN_NAME = 'config_json'
+  `);
+
+  if (Number(rows[0]?.total || 0) === 0) {
+    await query('ALTER TABLE projects ADD COLUMN config_json LONGTEXT NULL AFTER status');
+  }
+}
+
 async function listProjectsForUser(user) {
   const params = [];
   let where = '';
@@ -16,6 +87,7 @@ async function listProjectsForUser(user) {
       p.slug,
       p.path,
       p.status,
+      p.config_json,
       p.created_at,
       pm.user_id,
       pm.role AS project_role,
@@ -37,20 +109,32 @@ async function listProjectsForUser(user) {
 
 async function findProjectById(id) {
   const rows = await query(
-    'SELECT id, name, slug, path, status, created_at FROM projects WHERE id = ? LIMIT 1',
+    'SELECT id, name, slug, path, status, config_json, created_at FROM projects WHERE id = ? LIMIT 1',
     [id]
   );
 
-  return rows[0] || null;
+  if (!rows[0]) {
+    return null;
+  }
+
+  return {
+    ...rows[0],
+    config: parseProjectConfig(rows[0].config_json)
+  };
 }
 
-async function createProject({ name, slug, path, status = 'active' }) {
+async function createProject({ name, slug, path, status = 'active', config = null }) {
   const result = await query(
-    'INSERT INTO projects (name, slug, path, status) VALUES (?, ?, ?, ?)',
-    [name, slug, path, status]
+    'INSERT INTO projects (name, slug, path, status, config_json) VALUES (?, ?, ?, ?, ?)',
+    [name, slug, path, status, serializeProjectConfig(config)]
   );
 
   return findProjectById(Number(result.insertId));
+}
+
+async function updateProjectConfig(id, config) {
+  await query('UPDATE projects SET config_json = ? WHERE id = ?', [serializeProjectConfig(config), id]);
+  return findProjectById(id);
 }
 
 async function getProjectMembership(projectId, userId) {
@@ -91,6 +175,7 @@ function groupProjectRows(rows, user) {
         slug: row.slug,
         path: row.path,
         status: row.status,
+        config: parseProjectConfig(row.config_json),
         created_at: row.created_at,
         current_user_role: user.role === 'admin' ? 'admin' : row.current_user_project_role,
         members: []
@@ -111,10 +196,13 @@ function groupProjectRows(rows, user) {
 }
 
 module.exports = {
+  ensureProjectSchema,
   listProjectsForUser,
   findProjectById,
   createProject,
+  updateProjectConfig,
   getProjectMembership,
   upsertProjectMember,
-  removeProjectMember
+  removeProjectMember,
+  parseProjectConfig
 };

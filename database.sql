@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS projects (
   slug VARCHAR(120) NOT NULL,
   path VARCHAR(255) NOT NULL,
   status VARCHAR(64) NOT NULL DEFAULT 'active',
+  config_json LONGTEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY projects_slug_unique (slug)

@@ -10,6 +10,7 @@ const serviceRoutes = require('./routes/services');
 const projectRoutes = require('./routes/projects');
 const userRoutes = require('./routes/users');
 const { testConnection } = require('./config/db');
+const { ensureProjectSchema } = require('./models/projectModel');
 const { authenticateToken } = require('./middleware/authMiddleware');
 
 const app = express();
@@ -45,6 +46,7 @@ app.use((err, _req, res, _next) => {
 
 async function start() {
   await testConnection();
+  await ensureProjectSchema();
 
   app.listen(port, () => {
     console.log(`EKAFY API running on http://localhost:${port}`);
