@@ -1,4 +1,4 @@
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(message, status = 500, code = 'REQUEST_FAILED', details = null) {
     super(message);
     this.name = 'ApiError';
@@ -27,7 +27,7 @@ function ensureGlobalMessageBar() {
   return bar;
 }
 
-function hideGlobalMessage() {
+export function hideGlobalMessage() {
   const bar = document.getElementById('globalMessageBar');
   if (!bar) return;
 
@@ -36,7 +36,7 @@ function hideGlobalMessage() {
   document.body.classList.remove('has-global-message');
 }
 
-function showGlobalMessage(message, variant = 'error', details = null) {
+export function showGlobalMessage(message, variant = 'error', details = null) {
   const bar = ensureGlobalMessageBar();
   const text = bar.querySelector('.global-message-text');
   const closeButton = bar.querySelector('.global-message-close');
@@ -67,7 +67,7 @@ function formatErrorDetails(error) {
   return parts.join(' | ');
 }
 
-function reportGlobalError(error, context = '') {
+export function reportGlobalError(error, context = '') {
   const message = error?.message || 'Request failed';
   const details = formatErrorDetails(error);
   const prefix = context ? `${context}: ` : '';
@@ -75,8 +75,3 @@ function reportGlobalError(error, context = '') {
   console.error(context || 'App error', error);
   showGlobalMessage(`${prefix}${message}`, 'error', details);
 }
-
-window.ApiError = ApiError;
-window.ekafyShowMessage = showGlobalMessage;
-window.ekafyHideMessage = hideGlobalMessage;
-window.ekafyReportError = reportGlobalError;
