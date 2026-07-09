@@ -1,500 +1,314 @@
-# EKAFY Function Guide
+# EKAFY — API & Function Reference
 
-This file explains the main EKAFY functions and the commands used to control them on a Linux VPS.
+> Last updated: v0.2.0 — Full project management expansion
 
-## 1. Installation
+All endpoints require a valid session cookie (`ekafy_token`) or `Authorization: Bearer <token>` header unless otherwise noted.
 
-Run from any cloned repository location. The script copies the app into `/srv/ekafy` by default.
+---
 
-```bash
-sudo bash init.sh
-```
+## Authentication
 
-Install with Nginx:
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/auth/login` | POST | Public | Login; sets httpOnly session cookie |
+| `/api/auth/me` | GET | User | Returns current user object |
+| `/api/auth/logout` | POST | User | Clears session cookie |
 
-```bash
-sudo bash init.sh --install-nginx --domain panel.example.com
-```
+---
 
-Install into a custom directory:
+## System
 
-```bash
-sudo bash init.sh --app-dir /srv/my-panel
-```
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/system/status` | GET | User | CPU %, RAM %, disk %, uptime |
+| `/health` | GET | Public | Service health ping |
 
-The installer syncs the repository into the target directory, deletes stale files from previous installs, and backs up any existing `.env` to `/var/backups/ekafy/`.
+---
 
-Check installer options:
+## Users
 
-```bash
-sudo bash init.sh --help
-```
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/users` | GET | Admin | List all users with project memberships |
+| `/api/users` | POST | Admin | Create a new user |
+| `/api/users/:id` | DELETE | Admin | Remove a user |
 
-## 2. Systemd App Control
+---
 
-EKAFY is installed as a systemd service named `ekafy`.
+## Global Services
 
-Start:
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/services` | GET | User | List all globally whitelisted systemd services with active status |
+| `/api/services/:name/status` | GET | User | Get single service active status |
+| `/api/services/:name/:action` | POST | **Admin** | Run `start`, `stop`, or `restart` on a global service |
 
-```bash
-sudo systemctl start ekafy
-```
+**Allowed service names (global whitelist):** `nginx`, `mysql`, `mariadb`, `apache2`  
+**Allowed actions:** `start`, `stop`, `restart`
 
-Stop:
+---
 
-```bash
-sudo systemctl stop ekafy
-```
+## Projects
 
-Restart:
+### Core CRUD
 
-```bash
-sudo systemctl restart ekafy
-```
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects` | GET | User | List projects (admin sees all; users see assigned projects) |
+| `/api/projects` | POST | **Admin** | Create a new project |
+| `/api/projects/:id/wizard` | GET | Member | Get project wizard config and DB/API wizard output |
+| `/api/projects/:id/config` | PATCH | Manager | Update project wizard config (kind, db, api, presets, notes) |
+| `/api/projects/:id/members` | PUT | Manager | Assign a user to a project with a role |
+| `/api/projects/:id/members/:userId` | DELETE | Manager | Remove a user from a project |
 
-Check status:
-
-```bash
-sudo systemctl status ekafy
-```
-
-Watch logs:
-
-```bash
-sudo journalctl -u ekafy -f
-```
-
-## 3. Environment Configuration
-
-Production config lives here:
-
-```bash
-/srv/ekafy/.env
-```
-
-Edit it:
-
-```bash
-sudo nano /srv/ekafy/.env
-sudo systemctl restart ekafy
-```
-
-Important settings:
-
-```env
-PORT=3000
-NODE_ENV=production
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=ekafy
-DB_NAME=ekafy
-JWT_EXPIRES_IN=8h
-ALLOW_REGISTRATION=false
-ENABLE_SERVICE_CONTROL=true
-```
-
-Keep `.env` private. It contains the database password and JWT secret.
-
-## 4. Authentication API
-
-Base URL without Nginx:
-
-```text
-http://SERVER_IP:3000
-```
-
-Base URL with Nginx:
-
-```text
-http://YOUR_DOMAIN
-```
-
-Create first admin user:
-
-```bash
-curl -X POST http://127.0.0.1:3000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"change-this-password","role":"admin"}'
-```
-
-Login:
-
-```bash
-curl -X POST http://127.0.0.1:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"change-this-password"}'
-```
-
-The login response returns a JWT token:
-
+**POST `/api/projects` body:**
 ```json
 {
-  "token": "JWT_TOKEN_HERE",
-  "user": {
-    "id": 1,
-    "username": "admin",
-    "role": "admin"
+  "name": "My App",
+  "slug": "my-app",
+  "path": "/srv/my-app",
+  "domain": "app.example.com",
+  "port": 4001,
+  "gitRepoUrl": "git@github.com:user/repo.git",
+  "gitBranch": "main",
+  "config": {
+    "kind": "full",
+    "database": { "provider": "mariadb", "host": "127.0.0.1", "port": 3306, "databaseName": "myapp", "username": "myapp_user" },
+    "api": { "baseUrl": "https://api.example.com", "endpoints": [{ "name": "Health", "method": "GET", "path": "/health" }] }
   }
 }
 ```
 
-Use the token for protected API calls:
+---
 
-```bash
-curl http://127.0.0.1:3000/api/system/status \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
-```
+### Infrastructure Setup (Phase 1–3)
 
-Browser logins also set an `httpOnly` cookie, so the dashboard can stay signed in without storing the JWT in `localStorage`.
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/setup/scaffold` | POST | Manager | Create folder tree + seed .env file |
+| `/api/projects/:id/setup/nginx` | POST | Manager | Generate nginx server block, enable, reload |
+| `/api/projects/:id/setup/ssl` | POST | Manager | Provision SSL (certbot or self-signed fallback) |
 
-## 5. System Monitoring API
+**Scaffold** creates: `public/` `logs/` `releases/` `shared/` `config/` `.env`
 
-Endpoint:
-
-```http
-GET /api/system/status
-```
-
-Example:
-
-```bash
-curl http://127.0.0.1:3000/api/system/status \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
-```
-
-Response:
-
+**Nginx body:**
 ```json
-{
-  "cpu": 12.5,
-  "ram": 62,
-  "uptime": 12345,
-  "disk": 70
-}
+{ "domain": "app.example.com", "port": 4001, "type": "proxy" }
 ```
+`type` can be `"proxy"` (default — reverse-proxy to localhost:port) or `"static"` (serve `public/` folder).
 
-## 6. Service Status API
+**Requires:** `ENABLE_SERVICE_CONTROL=true` in `.env` and a Linux host.
 
-Allowed services:
+---
 
-```text
-nginx
-mysql
-mariadb
-apache2
-```
+### Database Wizard
 
-Check service status:
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/database/provision` | POST | Manager | Create MariaDB DB + user, save creds to project_envs |
+| `/api/projects/:id/database/tables` | GET | Member | List tables in the project's database |
+| `/api/projects/:id/database/query` | POST | Manager | Run a whitelisted SQL statement |
+| `/api/projects/:id/database/presets` | GET | Member | Get SQL template presets |
 
-```bash
-curl http://127.0.0.1:3000/api/services/nginx/status \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
-```
-
-Response:
-
+**Provision body:**
 ```json
-{
-  "service": "nginx",
-  "active": true
-}
+{ "databaseName": "myapp_db", "dbUser": "myapp_user" }
+```
+Password is **auto-generated** and saved to `project_envs`; never returned in the API response.
+
+**SQL whitelist (allowed statement prefixes):** `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, `DROP`, `SHOW`, `DESCRIBE`, `EXPLAIN`, `TRUNCATE`
+
+**Blocked patterns:** `DROP DATABASE`, `DROP USER`, `GRANT`, `REVOKE`, `FLUSH`, `LOAD DATA`, `INTO OUTFILE`, `CALL`
+
+---
+
+### Git Operations
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/git/status` | GET | Member | `git status --short` + last 15 log lines |
+| `/api/projects/:id/git/init` | POST | Manager | `git init` + optional remote add |
+| `/api/projects/:id/git/clone` | POST | Manager | `git clone <url>` into project path |
+| `/api/projects/:id/git/pull` | POST | Manager | `git pull origin <branch>` |
+| `/api/projects/:id/git/push` | POST | Manager | `git add -A && git commit -m "<msg>" && git push` |
+
+**Init/Clone body:**
+```json
+{ "repoUrl": "git@github.com:user/repo.git", "branch": "main" }
+```
+**Push body:**
+```json
+{ "message": "feat: add new feature" }
 ```
 
-## 7. Service Control API
+All git commands use `execFile('git', [...])` — no shell string interpolation.
 
-Allowed actions:
+---
 
-```text
-start
-stop
-restart
+### API Endpoint Registry
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/endpoints` | GET | Member | List all registered endpoints |
+| `/api/projects/:id/endpoints` | POST | Manager | Add an endpoint |
+| `/api/projects/:id/endpoints/:idx` | PUT | Manager | Update an endpoint by array index |
+| `/api/projects/:id/endpoints/:idx` | DELETE | Manager | Remove an endpoint |
+
+Endpoints are stored in `config_json.api.endpoints[]` and editable at any time.
+
+**Endpoint object:**
+```json
+{ "name": "Health", "method": "GET", "path": "/health", "description": "Service health check" }
 ```
 
-Start Nginx:
+---
 
-```bash
-curl -X POST http://127.0.0.1:3000/api/services/nginx/start \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
+### Environment Variables
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/env` | GET | Manager | List env key names and update timestamps (values NOT returned) |
+| `/api/projects/:id/env` | PUT | Manager | Upsert a single key-value; rewrites `.env` on disk |
+| `/api/projects/:id/env/:key` | DELETE | Manager | Remove a key; rewrites `.env` on disk |
+
+**Upsert body:**
+```json
+{ "key": "MY_SECRET", "value": "somevalue" }
+```
+Keys must match `^[A-Z][A-Z0-9_]{0,127}$`.
+
+---
+
+### Project-Linked Services
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/services` | GET | Member | List linked services with live status |
+| `/api/projects/:id/services` | POST | **Admin** | Link a systemd service to this project |
+| `/api/projects/:id/services/:name` | DELETE | **Admin** | Unlink a service |
+| `/api/projects/:id/services/:name/status` | GET | Member | Get active status of a linked service |
+| `/api/projects/:id/services/:name/:action` | POST | Manager | `start`, `stop`, or `restart` a linked service |
+
+**Link body:**
+```json
+{ "serviceName": "my-app", "label": "My App Service" }
 ```
 
-Restart MariaDB:
+Linked services are validated against the `project_services` table — only services registered for a project can be controlled through its project routes.
 
-```bash
-curl -X POST http://127.0.0.1:3000/api/services/mariadb/restart \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
+---
+
+## Database Schema
+
+### Tables
+
+| Table | Purpose |
+|---|---|
+| `users` | System accounts |
+| `logs` | Activity audit log |
+| `projects` | Project records with config, domain, port, git, ssl |
+| `project_members` | Project role assignments |
+| `project_envs` | Per-project key-value environment store |
+| `project_services` | Per-project linked systemd service registry |
+
+### New columns on `projects` (v0.2.0)
+
+| Column | Type | Description |
+|---|---|---|
+| `domain` | VARCHAR(253) | Primary domain for nginx/ssl |
+| `port` | SMALLINT UNSIGNED | App listen port |
+| `git_repo_url` | VARCHAR(512) | Remote git URL |
+| `git_branch` | VARCHAR(120) | Default branch (main) |
+| `ssl_enabled` | TINYINT(1) | SSL provisioned flag |
+| `nginx_config_path` | VARCHAR(512) | Path to generated nginx config |
+
+All new columns are added idempotently at boot by `ensureProjectSchema()`.
+
+---
+
+## Backend Module Map
+
+```
+server.js                            ← Express app, boot, error handler
+├── routes/
+│   ├── auth.js
+│   ├── system.js
+│   ├── users.js
+│   ├── services.js                  ← Global services (GET /, GET /:name/status, POST /:name/:action)
+│   └── projects.js                  ← All project sub-resource routes
+│
+├── controllers/
+│   ├── authController.js
+│   ├── systemController.js
+│   ├── userController.js
+│   ├── projectController.js         ← Core CRUD + wizard config
+│   ├── projectSetupController.js    ← scaffold / nginx / ssl
+│   ├── projectDatabaseController.js ← provision / tables / SQL query
+│   ├── projectGitController.js      ← init / clone / pull / push / status
+│   ├── projectEndpointController.js ← endpoint CRUD (stored in config_json)
+│   ├── projectEnvController.js      ← env CRUD (project_envs table)
+│   └── serviceController.js         ← global + project-linked service control
+│
+├── models/
+│   ├── userModel.js
+│   ├── logModel.js
+│   ├── projectModel.js              ← ensureProjectSchema, CRUD, membership
+│   ├── projectEnvModel.js           ← project_envs table + .env file writer
+│   └── projectServiceModel.js       ← project_services table
+│
+├── middleware/
+│   └── authMiddleware.js            ← authenticateToken, requireAdmin
+│
+├── config/
+│   └── db.js                        ← MariaDB pool + query helper
+│
+└── errors/
+    └── AppError.js                  ← Structured error with status + code
 ```
 
-Stop Apache:
+---
 
-```bash
-curl -X POST http://127.0.0.1:3000/api/services/apache2/stop \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
+## Frontend Module Map
+
+```
+public/
+├── dashboard.html                   ← Full SPA shell
+├── login.html
+├── style.css                        ← Design tokens, layout, all components
+└── js/
+    ├── pages/
+    │   └── dashboard.js             ← Boot, auth, tab routing, module wiring
+    │
+    ├── dashboard/
+    │   ├── state.js                 ← Shared mutable state (user, users, projects, selectedProject)
+    │   ├── constants.js             ← Wizard presets, SQL editor presets
+    │   ├── projects.js              ← Project card list, badge rendering, click events
+    │   ├── services.js              ← Global services panel (fetched from API)
+    │   ├── users.js                 ← Users table + member form sync
+    │   ├── status.js                ← System metrics (CPU/RAM/disk)
+    │   ├── forms.js                 ← Project modal + user form + member form
+    │   ├── wizard.js                ← In-form DB/API wizard preset logic
+    │   ├── projectDetail.js         ← Drawer orchestrator: tab switching + overview
+    │   ├── projectSetup.js          ← Setup tab: scaffold / nginx / ssl
+    │   ├── projectDatabase.js       ← Database tab: provision / tables / SQL editor
+    │   ├── projectGit.js            ← Git tab: init / clone / pull / push / status
+    │   ├── projectEndpoints.js      ← Endpoints tab: CRUD inline-edit table
+    │   └── projectServices.js       ← Services tab: linked services + controls
+    │
+    └── shared/
+        ├── api.js                   ← Fetch wrapper with JSON + error handling
+        ├── auth.js                  ← isAdmin, redirectOnAuthError, clearSession
+        ├── dom.js                   ← escapeHtml, setMeter, formatUptime
+        └── errors.js                ← reportGlobalError, showGlobalMessage
 ```
 
-Service control requires:
-
-```env
-ENABLE_SERVICE_CONTROL=true
-```
-
-The installer creates restricted sudoers rules for only the whitelisted `systemctl` commands.
-
-## 8. Projects API
-
-List projects:
-
-```bash
-curl http://127.0.0.1:3000/api/projects \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
-```
-
-Current response is a placeholder until project deployment management is expanded.
-
-Create a project as a global admin:
-
-```bash
-curl -X POST http://127.0.0.1:3000/api/projects \
-  -H "Authorization: Bearer JWT_TOKEN_HERE" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Client API","slug":"client-api","path":"/srv/client-api"}'
-```
-
-Assign a user to a project:
-
-```bash
-curl -X PUT http://127.0.0.1:3000/api/projects/1/members \
-  -H "Authorization: Bearer JWT_TOKEN_HERE" \
-  -H "Content-Type: application/json" \
-  -d '{"userId":2,"role":"manager"}'
-```
-
-Project member roles:
-
-```text
-manager - can manage users for that specific project
-user    - can use assigned project API access only
-```
-
-Remove a user from a project:
-
-```bash
-curl -X DELETE http://127.0.0.1:3000/api/projects/1/members/2 \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
-```
-
-## 9. User Management API
-
-Global user roles:
-
-```text
-admin - can manage all projects, services, system controls, and users
-user  - no global administrative privileges
-```
-
-Project roles are separate from global roles. A global `user` can be a `manager` on one project and a regular `user` on another project.
-
-List users as admin:
-
-```bash
-curl http://127.0.0.1:3000/api/users \
-  -H "Authorization: Bearer JWT_TOKEN_HERE"
-```
-
-Create user as admin:
-
-```bash
-curl -X POST http://127.0.0.1:3000/api/users \
-  -H "Authorization: Bearer JWT_TOKEN_HERE" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"developer","password":"change-this-password","role":"user"}'
-```
-
-Change global role as admin:
-
-```bash
-curl -X PATCH http://127.0.0.1:3000/api/users/2/role \
-  -H "Authorization: Bearer JWT_TOKEN_HERE" \
-  -H "Content-Type: application/json" \
-  -d '{"role":"admin"}'
-```
-
-## 10. Database Control
-
-Open MariaDB shell:
-
-```bash
-sudo mysql
-```
-
-Use EKAFY database:
-
-```sql
-USE ekafy;
-```
-
-List users:
-
-```sql
-SELECT id, username, role, created_at FROM users;
-```
-
-List projects:
-
-```sql
-SELECT id, name, slug, path, status, created_at FROM projects;
-```
-
-List project memberships:
-
-```sql
-SELECT
-  p.name AS project,
-  u.username,
-  pm.role
-FROM project_members pm
-JOIN projects p ON p.id = pm.project_id
-JOIN users u ON u.id = pm.user_id
-ORDER BY p.name, u.username;
-```
-
-List activity logs:
-
-```sql
-SELECT id, user_id, action, timestamp FROM logs ORDER BY timestamp DESC LIMIT 50;
-```
-
-Backup database:
-
-```bash
-sudo mysqldump ekafy > ekafy-backup.sql
-```
-
-Restore database:
-
-```bash
-sudo mysql ekafy < ekafy-backup.sql
-```
-
-## 11. Nginx Control
-
-If installed through `init.sh --install-nginx`, config is created at:
-
-```bash
-/etc/nginx/sites-available/ekafy
-```
-
-Test Nginx config:
-
-```bash
-sudo nginx -t
-```
-
-Reload Nginx:
-
-```bash
-sudo systemctl reload nginx
-```
-
-Restart Nginx:
-
-```bash
-sudo systemctl restart nginx
-```
-
-## 12. Frontend Pages
-
-Login page:
-
-```text
-/login.html
-```
-
-Dashboard:
-
-```text
-/dashboard.html
-```
-
-The frontend uses an `httpOnly` auth cookie for browser sessions. API clients can still use Bearer tokens.
-
-Dashboard sections:
-
-```text
-System metrics
-Services
-Projects
-User Management
-```
-
-Projects now include a wizard-style setup for database-backed, API-backed, and full-stack deployments. The wizard stores config in the project record and generates safe SQL/API templates instead of executing arbitrary commands.
-
-Only global admins see the User Management controls.
-
-## 13. Updating EKAFY
-
-If the source clone is still available:
-
-```bash
-cd /path/to/cloned/repo
-git pull
-sudo bash init.sh --no-admin
-```
-
-Then restart:
-
-```bash
-sudo systemctl restart ekafy
-```
-
-The installer copies updated files to `/srv/ekafy`, backs up existing `.env`, and installs dependencies.
-
-## 14. Troubleshooting
-
-Check app status:
-
-```bash
-sudo systemctl status ekafy
-```
-
-Watch app logs:
-
-```bash
-sudo journalctl -u ekafy -f
-```
-
-Check if port is listening:
-
-```bash
-sudo ss -ltnp | grep 3000
-```
-
-Check MariaDB:
-
-```bash
-sudo systemctl status mariadb
-```
-
-Check Nginx:
-
-```bash
-sudo nginx -t
-sudo systemctl status nginx
-```
-
-Common fixes:
-
-```bash
-sudo systemctl restart mariadb
-sudo systemctl restart ekafy
-sudo systemctl reload nginx
-```
-
-## 15. Security Checklist
-
-- Use a strong admin password.
-- Keep `/srv/ekafy/.env` private.
-- Keep `ALLOW_REGISTRATION=false` after the first admin user exists.
-- Use HTTPS before public production use.
-- Keep service control enabled only if you need it.
-- Never add arbitrary shell execution endpoints.
-- Keep only required VPS ports open in the firewall.
+---
+
+## Security Notes
+
+- All shell commands use `execFile` — never template strings passed to a shell.
+- `ENABLE_SERVICE_CONTROL=true` must be explicitly set; all shell ops are gated.
+- SQL query tool whitelists statement prefixes; blocks destructive admin commands.
+- Env variable values are **never returned** over the API; only key names + timestamps are listed.
+- DB credentials (auto-generated password) are stored in `project_envs` and written to the `.env` file; never appear in API responses.
+- Project service control validates that the service is registered in `project_services` for that project before running `systemctl`.

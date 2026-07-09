@@ -4,6 +4,7 @@
 
 export const dashboardState = {
   user: null,
+  users: [],
   projects: [],
   selectedProject: null  // project object currently shown in the detail drawer
 };
