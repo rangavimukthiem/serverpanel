@@ -1,10 +1,25 @@
+'use strict';
+
+/**
+ * routes/services.js
+ *
+ * Global (non-project) systemd service routes.
+ * Base path: /api/services  (mounted in server.js with authenticateToken applied)
+ *
+ * Project-linked service routes live in routes/projects.js under /:id/services/*
+ */
+
 const express = require('express');
-const { controlService, serviceStatus } = require('../controllers/serviceController');
+const { listServices, serviceStatus, controlService } = require('../controllers/serviceController');
 const { requireAdmin } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-router.get('/:name/status', serviceStatus);
+// List all globally whitelisted services with their active status
+router.get('/', listServices);
+
+// Status and control for a single global service
+router.get('/:name/status',  serviceStatus);
 router.post('/:name/:action', requireAdmin, controlService);
 
 module.exports = router;

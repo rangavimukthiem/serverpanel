@@ -1,7 +1,11 @@
+/**
+ * state.js — Shared mutable dashboard state.
+ */
+
 export const dashboardState = {
   user: null,
   projects: [],
-  users: []
+  selectedProject: null  // project object currently shown in the detail drawer
 };
 
 let endpointRowCount = 0;
@@ -11,6 +15,6 @@ export function nextEndpointRowId() {
   return endpointRowCount;
 }
 
-export function resetEndpointRowCount(value = 0) {
-  endpointRowCount = Number(value) || 0;
+export function resetEndpointRowCount(count = 0) {
+  endpointRowCount = count;
 }
