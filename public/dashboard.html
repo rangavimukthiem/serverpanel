@@ -21,13 +21,6 @@
           </div>
         </div>
 
-        <nav class="nav-list" aria-label="Main">
-          <a class="active" href="/dashboard.html">Dashboard</a>
-          <a href="#services">Services</a>
-          <a href="#projects">Projects</a>
-          <a href="#access">Users</a>
-        </nav>
-
         <button id="logoutButton" class="ghost-button" type="button">Log out</button>
       </aside>
 
@@ -40,30 +33,46 @@
           <div class="refresh-pill">Auto refresh: 5s</div>
         </header>
 
-        <section class="metric-grid" aria-label="System metrics">
-          <article class="metric-card">
-            <span>CPU</span>
-            <strong id="cpuValue">--%</strong>
-            <div class="meter"><div id="cpuMeter"></div></div>
-          </article>
-          <article class="metric-card">
-            <span>RAM</span>
-            <strong id="ramValue">--%</strong>
-            <div class="meter"><div id="ramMeter"></div></div>
-          </article>
-          <article class="metric-card">
-            <span>Disk</span>
-            <strong id="diskValue">--%</strong>
-            <div class="meter"><div id="diskMeter"></div></div>
-          </article>
-          <article class="metric-card">
-            <span>Uptime</span>
-            <strong id="uptimeValue">--</strong>
-            <small>Host runtime</small>
-          </article>
+        <nav class="tab-list" aria-label="Dashboard screens">
+          <a class="tab-link" href="#dashboard" data-dashboard-tab="dashboard">Dashboard</a>
+          <a class="tab-link" href="#services" data-dashboard-tab="services">Services</a>
+          <a class="tab-link" href="#projects" data-dashboard-tab="projects">Projects</a>
+          <a class="tab-link" href="#access" data-dashboard-tab="access">Users</a>
+        </nav>
+
+        <section id="dashboard" class="panel-section" data-dashboard-screen="dashboard">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Server overview</p>
+              <h3>Dashboard</h3>
+            </div>
+          </div>
+
+          <section class="metric-grid" aria-label="System metrics">
+            <article class="metric-card">
+              <span>CPU</span>
+              <strong id="cpuValue">--%</strong>
+              <div class="meter"><div id="cpuMeter"></div></div>
+            </article>
+            <article class="metric-card">
+              <span>RAM</span>
+              <strong id="ramValue">--%</strong>
+              <div class="meter"><div id="ramMeter"></div></div>
+            </article>
+            <article class="metric-card">
+              <span>Disk</span>
+              <strong id="diskValue">--%</strong>
+              <div class="meter"><div id="diskMeter"></div></div>
+            </article>
+            <article class="metric-card">
+              <span>Uptime</span>
+              <strong id="uptimeValue">--</strong>
+              <small>Host runtime</small>
+            </article>
+          </section>
         </section>
 
-        <section id="services" class="panel-section">
+        <section id="services" class="panel-section" data-dashboard-screen="services">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Whitelisted systemd units</p>
@@ -76,7 +85,7 @@
           <p id="serviceMessage" class="message" role="status"></p>
         </section>
 
-        <section id="projects" class="panel-section">
+        <section id="projects" class="panel-section" data-dashboard-screen="projects">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Deployments</p>
@@ -153,7 +162,7 @@
           <div id="projectsGrid" class="project-grid"></div>
         </section>
 
-        <section id="access" class="panel-section admin-only">
+        <section id="access" class="panel-section admin-only" data-dashboard-screen="access">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Global users and project roles</p>
