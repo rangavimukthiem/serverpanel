@@ -328,6 +328,13 @@ input:focus, select:focus, textarea:focus {
 }
 input::placeholder, textarea::placeholder { color: var(--muted); }
 
+/* Auto-filled fields — teal highlight until the user manually edits them */
+.is-auto-filled {
+  border-color: rgba(45,212,191,0.45) !important;
+  background: rgba(45,212,191,0.04) !important;
+  color: var(--text);
+}
+
 /* ─── Auth pages ───────────────────────────────────────────────────────────── */
 .auth-page  { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
 .auth-shell { width: min(100%, 420px); }

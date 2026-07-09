@@ -1,6 +1,100 @@
 import { escapeHtml } from '../shared/dom.js';
 import { databaseQueryPresets, apiEndpointPresets, apiEndpointPresetMap } from './constants.js';
-import { nextEndpointRowId, resetEndpointRowCount } from './state.js';
+import { nextEndpointRowId, resetEndpointRowCount, dashboardState } from './state.js';
+
+// ── Auto-fill utilities ───────────────────────────────────────────────────────
+
+/**
+ * Convert a project name into a URL/filesystem-safe slug.
+ * e.g. "My Awesome App 2!" → "my-awesome-app-2"
+ */
+export function toSlug(name) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+/**
+ * Convert a slug to a SQL/filesystem identifier (underscores, no leading/trailing).
+ * e.g. "my-awesome-app" → "my_awesome_app"
+ */
+function toDbIdentifier(slug) {
+  return slug.replace(/-/g, '_').replace(/^_+|_+$/g, '');
+}
+
+/**
+ * Find the next open port starting from 4001,
+ * skipping any ports already used by existing projects.
+ */
+function nextAvailablePort() {
+  const used = new Set(
+    (dashboardState.projects || []).map((p) => p.port).filter(Boolean)
+  );
+  let port = 4001;
+  while (used.has(port)) port++;
+  return port;
+}
+
+/** Set a form field's value and mark it as auto-filled (unless manually locked). */
+function setAutoField(el, value) {
+  if (!el || el.dataset.manualEdit === 'true') return;
+  el.value = value;
+  el.dataset.autoValue = String(value);
+  el.classList.add('is-auto-filled');
+}
+
+/** Lock a field from further auto-fill once the user has typed in it. */
+function lockField(el) {
+  if (!el) return;
+  el.dataset.manualEdit = 'true';
+  el.classList.remove('is-auto-filled');
+}
+
+/** Clear all auto-fill marks from a form (on reset). */
+function clearAutoFillState(form) {
+  form.querySelectorAll('.is-auto-filled, [data-manual-edit], [data-auto-value]').forEach((el) => {
+    el.classList.remove('is-auto-filled');
+    delete el.dataset.manualEdit;
+    delete el.dataset.autoValue;
+  });
+}
+
+const AUTO_FIELD_NAMES = ['slug', 'path', 'port', 'database.databaseName', 'database.username'];
+
+function getField(form, name) {
+  return form.querySelector(`[name="${name}"]`);
+}
+
+/** Wire the auto-fill listeners on the project name input. */
+function initAutoFill(form) {
+  if (form.dataset.autoFillReady === 'true') return;
+  form.dataset.autoFillReady = 'true';
+
+  // When user manually edits any auto-fill field → lock it from future auto-fills
+  AUTO_FIELD_NAMES.forEach((fieldName) => {
+    const el = getField(form, fieldName);
+    if (!el) return;
+    el.addEventListener('input', () => lockField(el));
+  });
+
+  const nameInput = getField(form, 'name');
+  if (!nameInput) return;
+
+  nameInput.addEventListener('input', () => {
+    const slug  = toSlug(nameInput.value);
+    const dbId  = toDbIdentifier(slug);
+    const port  = nextAvailablePort();
+
+    setAutoField(getField(form, 'slug'),                 slug);
+    setAutoField(getField(form, 'path'),                 slug ? `/srv/${slug}` : '');
+    setAutoField(getField(form, 'port'),                 slug ? port : '');
+    setAutoField(getField(form, 'database.databaseName'), dbId ? dbId.slice(0, 63) : '');
+    setAutoField(getField(form, 'database.username'),     dbId ? dbId.slice(0, 16) : '');
+  });
+}
 
 function getProjectForm() {
   return document.getElementById('projectForm');
@@ -277,6 +371,9 @@ export function setupProjectWizard() {
   if (wizardPreview) {
     renderWizardPreview(wizardPreview, readProjectWizardConfig());
   }
+
+  // Wire the name → auto-fill listeners
+  initAutoFill(form);
 }
 
 export function resetProjectWizard() {
@@ -284,6 +381,8 @@ export function resetProjectWizard() {
   if (!form) return;
 
   form.reset();
+  clearAutoFillState(form);        // ← unlock all auto-fill fields
+  delete form.dataset.autoFillReady; // ← allow re-init on next open
 
   const endpointList = getEndpointList();
   if (endpointList) {
