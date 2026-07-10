@@ -252,10 +252,13 @@ prepare_app_dir() {
     --exclude '.git/' \
     "$SOURCE_DIR/" "$APP_DIR/"
 
-  [[ -f "$APP_DIR/package.json" ]] || fail "Missing $APP_DIR/package.json"
-  [[ -f "$APP_DIR/database.sql" ]] || fail "Missing $APP_DIR/database.sql"
-
+  [[ -f "$APP_DIR/package.json" ]] || fail "Sync failed: missing $APP_DIR/package.json"
   chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
+
+  # Ensure the parent /srv directory is owned by the app user so that projects can be created without manual chmod/chown
+  log "Configuring /srv directory permissions for automatic project deployment"
+  mkdir -p /srv
+  chown "$APP_USER:$APP_GROUP" /srv
 }
 
 setup_mariadb() {
@@ -375,21 +378,26 @@ prompt_domain() {
   [[ "$INSTALL_NGINX" != "yes" ]] && return
   [[ -n "$DOMAIN_NAME" ]] && return   # already set via --domain flag
 
+  # Auto-detect public IP
+  local public_ip
+  public_ip=$(curl -s --max-time 3 https://api.ipify.org || hostname -I | awk '{print $1}')
+  public_ip="${public_ip// /}"
+
   printf '\n'
-  printf '\033[1;36m╔══════════════════════════════════════════════════════════╗\033[0m\n'
-  printf '\033[1;36m║         DOMAIN & DNS SETUP — READ THIS FIRST             ║\033[0m\n'
-  printf '\033[1;36m╠══════════════════════════════════════════════════════════╣\033[0m\n'
-  printf '\033[1;36m║\033[0m  For EKAFY to work on a domain you must add a DNS record: \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m                                                          \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m   Type  : \033[1;33mA\033[0m                                               \033[1;36m║\033[0m\n'
+  printf '\033[1;36m╔════════════════════════════════════════════════════════════╗\033[0m\n'
+  printf '\033[1;36m║           DOMAIN & DNS SETUP — READ THIS FIRST             ║\033[0m\n'
+  printf '\033[1;36m╠════════════════════════════════════════════════════════════╣\033[0m\n'
+  printf '\033[1;36m║\033[0m  For EKAFY to work on a domain, add this DNS record:       \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m                                                            \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m   Type  : \033[1;33mA\033[0m                                                \033[1;36m║\033[0m\n'
   printf '\033[1;36m║\033[0m   Name  : \033[1;33mpanel\033[0m  (or @ for root domain, or any subdomain) \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m   Value : \033[1;33mYOUR_SERVER_IP\033[0m                                   \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m   TTL   : \033[1;33m300\033[0m  (5 min, raise to 3600 later)               \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m                                                          \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m  DNS changes take 1–30 min to propagate.                  \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m   Value : \033[1;33m%-47s\033[1;36m║\033[0m\n' "$public_ip"
+  printf '\033[1;36m║\033[0m   TTL   : \033[1;33m300\033[0m  (5 min, raise to 3600 later)                \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m                                                            \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m  DNS changes take 1–30 min to propagate.                   \033[1;36m║\033[0m\n'
   printf '\033[1;36m║\033[0m  If the record is not live yet, SSL will fall back to a   \033[1;36m║\033[0m\n'
   printf '\033[1;36m║\033[0m  self-signed certificate (browser will show a warning).   \033[1;36m║\033[0m\n'
-  printf '\033[1;36m╚══════════════════════════════════════════════════════════╝\033[0m\n'
+  printf '\033[1;36m╚════════════════════════════════════════════════════════════╝\033[0m\n'
   printf '\n'
 
   read -r -p "Enter your domain (e.g. panel.example.com), or press Enter to skip: " DOMAIN_NAME

@@ -4,7 +4,7 @@
 
 import { api } from '../shared/api.js';
 import { escapeHtml } from '../shared/dom.js';
-import { reportGlobalError } from '../shared/errors.js';
+import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
 
 // ── Terminal helper ───────────────────────────────────────────────────────────
 
@@ -64,6 +64,7 @@ function bindSetupButtons(project) {
         data.directories?.forEach((d) => writeOutput('setupOutput', `  ✓ ${d}`));
         if (data.envFile) writeOutput('setupOutput', `  ✓ .env → ${data.envFile}`);
         setBadge('scaffoldBadge', '✓ Done', 'badge-provisioned');
+        showGlobalMessage('Folder structure created successfully!', 'success');
         // Refresh project in state
         window.dispatchEvent(new CustomEvent('projectRefreshNeeded'));
       } catch (err) {
@@ -99,6 +100,7 @@ function bindSetupButtons(project) {
         writeOutput('setupOutput', `  Config: ${data.configPath}`);
         writeOutput('setupOutput', `  Domain: ${data.domain}`);
         setBadge('nginxBadge', '✓ Done', 'badge-active');
+        showGlobalMessage('Nginx configuration generated and reloaded!', 'success');
         window.dispatchEvent(new CustomEvent('projectRefreshNeeded'));
       } catch (err) {
         writeOutput('setupOutput', `✗ ${err.message}`, 'err');
@@ -124,6 +126,7 @@ function bindSetupButtons(project) {
         writeOutput('setupOutput', `  Method: ${data.method}`);
         if (data.output) writeOutput('setupOutput', data.output);
         setBadge('sslBadge', '✓ SSL', 'badge-ssl');
+        showGlobalMessage(`SSL certificate successfully provisioned (${data.method})!`, 'success');
         window.dispatchEvent(new CustomEvent('projectRefreshNeeded'));
       } catch (err) {
         writeOutput('setupOutput', `✗ ${err.message}`, 'err');
