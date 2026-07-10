@@ -173,6 +173,12 @@ function openDrawer(project) {
   // Reset tab state for the new project
   loadedTabs.clear();
 
+  // Clear DB provisioning inputs so auto-fill works cleanly for each project
+  const dbNameEl = document.getElementById('dbName');
+  const dbUserEl = document.getElementById('dbUser');
+  if (dbNameEl) dbNameEl.value = '';
+  if (dbUserEl) dbUserEl.value = '';
+
   // Update header
   const nameEl = document.getElementById('detailProjectName');
   const slugEl = document.getElementById('detailProjectSlug');

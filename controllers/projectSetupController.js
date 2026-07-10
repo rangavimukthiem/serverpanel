@@ -101,6 +101,13 @@ async function scaffold(req, res, next) {
       envFile: path.join(project.path, '.env')
     });
   } catch (error) {
+    if (error.code === 'EACCES') {
+      return next(new AppError(
+        `Permission denied creating project directory. Run: sudo mkdir -p ${error.path || '<project-path>'} && sudo chown $(whoami) ${error.path || '<project-path>'}`,
+        500,
+        'EACCES'
+      ));
+    }
     return next(error);
   }
 }

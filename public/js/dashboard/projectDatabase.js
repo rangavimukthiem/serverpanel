@@ -28,12 +28,48 @@ function setBadge(id, text, cls) {
   el.className = `status-badge ${cls}`;
 }
 
+/**
+ * Converts a project slug into a safe MariaDB identifier segment.
+ * Replaces hyphens with underscores, strips invalid chars, truncates to 48 chars.
+ * e.g. "my-cool-app" → "my_cool_app"
+ */
+function slugToDbIdent(slug) {
+  return (slug || '')
+    .toLowerCase()
+    .replace(/-/g, '_')
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 48);
+}
+
 // ── Tab init ──────────────────────────────────────────────────────────────────
 
 export async function loadDatabaseTab(project) {
+  prefillDbFields(project);
   renderSqlPresets();
   bindDatabaseActions(project);
   await refreshTablesList(project);
+}
+
+/**
+ * Auto-fills the DB name and DB user inputs from the project slug.
+ * Only fills if the field is currently empty (respects manual edits on re-open).
+ * e.g. slug "my-app" → dbName "my_app_db", dbUser "my_app_user"
+ */
+function prefillDbFields(project) {
+  const ident   = slugToDbIdent(project.slug || project.name);
+  const dbNameEl = document.getElementById('dbName');
+  const dbUserEl = document.getElementById('dbUser');
+
+  // Pre-fill from config if already provisioned, otherwise derive from slug
+  const configuredName = project.config?.database?.databaseName;
+  const configuredUser = project.config?.database?.username;
+
+  if (dbNameEl && !dbNameEl.value) {
+    dbNameEl.value = configuredName || `${ident}_db`;
+  }
+  if (dbUserEl && !dbUserEl.value) {
+    dbUserEl.value = configuredUser || `${ident}_user`;
+  }
 }
 
 function renderSqlPresets() {
