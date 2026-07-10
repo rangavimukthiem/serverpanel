@@ -444,15 +444,18 @@ NGINX
 
   ln -sfn "/etc/nginx/sites-available/${APP_NAME}" "/etc/nginx/sites-enabled/${APP_NAME}"
 
-  # Grant app user/group write access to Nginx directories so project setup works without root
-  log "Configuring Nginx directory permissions for ${APP_GROUP}"
-  chown -R root:"${APP_GROUP}" /etc/nginx/sites-available /etc/nginx/sites-enabled
-  chmod -R g+w /etc/nginx/sites-available /etc/nginx/sites-enabled
-
   nginx -t
   systemctl enable --now nginx
   systemctl reload nginx
   log "Nginx configured — ${DOMAIN_NAME} → 127.0.0.1:${PORT}"
+}
+
+configure_nginx_permissions() {
+  if [[ -d /etc/nginx ]]; then
+    log "Configuring Nginx directory permissions for ${APP_GROUP}"
+    chown -R root:"${APP_GROUP}" /etc/nginx/sites-available /etc/nginx/sites-enabled
+    chmod -R g+w /etc/nginx/sites-available /etc/nginx/sites-enabled
+  fi
 }
 
 # ── SSL via certbot (Let's Encrypt) with self-signed fallback ─────────────────
@@ -651,6 +654,7 @@ main() {
   write_systemd_service
   configure_sudoers_for_services
   configure_nginx
+  configure_nginx_permissions
   provision_ssl        # Let's Encrypt or self-signed, after nginx is live
   create_admin_user
   print_summary
