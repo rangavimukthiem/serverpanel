@@ -341,11 +341,6 @@ Environment=NODE_ENV=production
 ExecStart=$(command -v node) ${APP_DIR}/server.js
 Restart=always
 RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-ProtectHome=true
-ReadWritePaths=${APP_DIR}
 
 [Install]
 WantedBy=multi-user.target
@@ -447,6 +442,12 @@ NGINX
   rm -f /etc/nginx/sites-enabled/default
 
   ln -sfn "/etc/nginx/sites-available/${APP_NAME}" "/etc/nginx/sites-enabled/${APP_NAME}"
+
+  # Grant app user/group write access to Nginx directories so project setup works without root
+  log "Configuring Nginx directory permissions for ${APP_GROUP}"
+  chown -R root:"${APP_GROUP}" /etc/nginx/sites-available /etc/nginx/sites-enabled
+  chmod -R g+w /etc/nginx/sites-available /etc/nginx/sites-enabled
+
   nginx -t
   systemctl enable --now nginx
   systemctl reload nginx
