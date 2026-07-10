@@ -13,24 +13,18 @@ PORT="3000"
 NODE_MAJOR="20"
 INSTALL_NGINX="no"
 DOMAIN_NAME=""
+SSL_EMAIL=""
+SKIP_SSL="no"
 CREATE_ADMIN="yes"
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD=""
 ENABLE_SERVICE_CONTROL="true"
 ENV_BACKUP_DIR="/var/backups/ekafy"
+SSL_METHOD="none"
 
-log() {
-  printf '\n[EKAFY] %s\n' "$*"
-}
-
-warn() {
-  printf '\n[EKAFY:WARN] %s\n' "$*" >&2
-}
-
-fail() {
-  printf '\n[EKAFY:ERROR] %s\n' "$*" >&2
-  exit 1
-}
+log()  { printf '\n\033[1;32m[EKAFY]\033[0m %s\n' "$*"; }
+warn() { printf '\n\033[1;33m[EKAFY:WARN]\033[0m %s\n' "$*" >&2; }
+fail() { printf '\n\033[1;31m[EKAFY:ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
   cat <<USAGE
@@ -47,8 +41,10 @@ Options:
   --db-user USER              MariaDB app user. Default: ekafy
   --port PORT                 Local Node.js port. Default: 3000
   --node-major VERSION        NodeSource major version. Default: 20
-  --domain DOMAIN             Configure Nginx reverse proxy for this domain
-  --install-nginx             Install/configure Nginx reverse proxy
+  --domain DOMAIN             Configure Nginx + SSL for this domain (skips interactive prompt)
+  --ssl-email EMAIL           Email for Let's Encrypt notifications
+  --skip-ssl                  Set up Nginx but skip SSL certificate provisioning
+  --install-nginx             Prompt for domain and configure Nginx reverse proxy
   --no-admin                  Skip first admin user creation
   --admin-username USER       First admin username. Default: admin
   --disable-service-control   Keep systemctl controls disabled in .env
@@ -56,8 +52,8 @@ Options:
 
 Examples:
   sudo bash init.sh
-  sudo bash /tmp/srv/init.sh --app-dir /srv/ekafy
-  sudo bash init.sh --install-nginx --domain panel.example.com
+  sudo bash init.sh --domain panel.example.com --ssl-email admin@example.com
+  sudo bash init.sh --domain panel.example.com --skip-ssl
   sudo bash init.sh --app-dir /srv/ekafy --admin-username owner
 USAGE
 }
@@ -97,6 +93,14 @@ while [[ $# -gt 0 ]]; do
       DOMAIN_NAME="${2:-}"
       INSTALL_NGINX="yes"
       shift 2
+      ;;
+    --ssl-email)
+      SSL_EMAIL="${2:-}"
+      shift 2
+      ;;
+    --skip-ssl)
+      SKIP_SSL="yes"
+      shift
       ;;
     --install-nginx)
       INSTALL_NGINX="yes"
@@ -297,6 +301,11 @@ ALLOW_REGISTRATION=false
 ENABLE_SERVICE_CONTROL=${ENABLE_SERVICE_CONTROL}
 ENV
 
+  # Append SSL email so projectSetupController can use it for per-project certs
+  if [[ -n "$SSL_EMAIL" ]]; then
+    printf 'SSL_EMAIL=%s\n' "$SSL_EMAIL" >> "$env_file"
+  fi
+
   chown "$APP_USER:$APP_GROUP" "$env_file"
   chmod 600 "$env_file"
 }
@@ -344,16 +353,14 @@ UNIT
 }
 
 configure_sudoers_for_services() {
-  if [[ "$ENABLE_SERVICE_CONTROL" != "true" ]]; then
-    return
-  fi
+  [[ "$ENABLE_SERVICE_CONTROL" != "true" ]] && return
 
   local systemctl_path
   systemctl_path="$(command -v systemctl)"
 
   log "Allowing EKAFY service user to control whitelisted systemd units"
   cat > "/etc/sudoers.d/${APP_NAME}-services" <<SUDOERS
-${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path} stop nginx, ${systemctl_path} restart nginx, ${systemctl_path} is-active --quiet nginx
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path} stop nginx, ${systemctl_path} restart nginx, ${systemctl_path} reload nginx, ${systemctl_path} is-active --quiet nginx
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mysql, ${systemctl_path} stop mysql, ${systemctl_path} restart mysql, ${systemctl_path} is-active --quiet mysql
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mariadb, ${systemctl_path} stop mariadb, ${systemctl_path} restart mariadb, ${systemctl_path} is-active --quiet mariadb
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start apache2, ${systemctl_path} stop apache2, ${systemctl_path} restart apache2, ${systemctl_path} is-active --quiet apache2
@@ -362,18 +369,52 @@ SUDOERS
   visudo -cf "/etc/sudoers.d/${APP_NAME}-services" >/dev/null
 }
 
-configure_nginx() {
-  if [[ "$INSTALL_NGINX" != "yes" ]]; then
+# ── Domain prompt + DNS notice ────────────────────────────────────────────────
+
+prompt_domain() {
+  [[ "$INSTALL_NGINX" != "yes" ]] && return
+  [[ -n "$DOMAIN_NAME" ]] && return   # already set via --domain flag
+
+  printf '\n'
+  printf '\033[1;36m╔══════════════════════════════════════════════════════════╗\033[0m\n'
+  printf '\033[1;36m║         DOMAIN & DNS SETUP — READ THIS FIRST             ║\033[0m\n'
+  printf '\033[1;36m╠══════════════════════════════════════════════════════════╣\033[0m\n'
+  printf '\033[1;36m║\033[0m  For EKAFY to work on a domain you must add a DNS record: \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m                                                          \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m   Type  : \033[1;33mA\033[0m                                               \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m   Name  : \033[1;33mpanel\033[0m  (or @ for root domain, or any subdomain) \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m   Value : \033[1;33mYOUR_SERVER_IP\033[0m                                   \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m   TTL   : \033[1;33m300\033[0m  (5 min, raise to 3600 later)               \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m                                                          \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m  DNS changes take 1–30 min to propagate.                  \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m  If the record is not live yet, SSL will fall back to a   \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m  self-signed certificate (browser will show a warning).   \033[1;36m║\033[0m\n'
+  printf '\033[1;36m╚══════════════════════════════════════════════════════════╝\033[0m\n'
+  printf '\n'
+
+  read -r -p "Enter your domain (e.g. panel.example.com), or press Enter to skip: " DOMAIN_NAME
+  DOMAIN_NAME="${DOMAIN_NAME// /}"
+
+  if [[ -z "$DOMAIN_NAME" ]]; then
+    warn "No domain entered. EKAFY will be served on port ${PORT} without Nginx/SSL."
+    INSTALL_NGINX="no"
     return
   fi
 
-  if [[ -z "$DOMAIN_NAME" ]]; then
-    read -r -p "Domain name for Nginx server_name, or _ for IP-only access: " DOMAIN_NAME
-    DOMAIN_NAME="${DOMAIN_NAME:-_}"
+  if [[ -z "$SSL_EMAIL" && "$SKIP_SSL" != "yes" ]]; then
+    read -r -p "Email for Let's Encrypt notifications (Enter to skip): " SSL_EMAIL
+    SSL_EMAIL="${SSL_EMAIL// /}"
   fi
+}
 
-  log "Configuring Nginx reverse proxy"
+configure_nginx() {
+  [[ "$INSTALL_NGINX" != "yes" || -z "$DOMAIN_NAME" ]] && return
+
+  log "Configuring Nginx reverse proxy → ${DOMAIN_NAME}:80 → 127.0.0.1:${PORT}"
+
+  # HTTP-only block first; certbot will upgrade to HTTPS automatically
   cat > "/etc/nginx/sites-available/${APP_NAME}" <<NGINX
+# EKAFY — managed by init.sh
 server {
     listen 80;
     server_name ${DOMAIN_NAME};
@@ -381,20 +422,106 @@ server {
     client_max_body_size 1m;
 
     location / {
-        proxy_pass http://127.0.0.1:${PORT};
+        proxy_pass         http://127.0.0.1:${PORT};
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header   Upgrade           \$http_upgrade;
+        proxy_set_header   Connection        'upgrade';
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
     }
 }
 NGINX
+
+  # Remove default site to avoid conflicts on port 80
+  rm -f /etc/nginx/sites-enabled/default
 
   ln -sfn "/etc/nginx/sites-available/${APP_NAME}" "/etc/nginx/sites-enabled/${APP_NAME}"
   nginx -t
   systemctl enable --now nginx
   systemctl reload nginx
+  log "Nginx configured — ${DOMAIN_NAME} → 127.0.0.1:${PORT}"
+}
+
+# ── SSL via certbot (Let's Encrypt) with self-signed fallback ─────────────────
+
+provision_ssl() {
+  [[ "$INSTALL_NGINX" != "yes" || -z "$DOMAIN_NAME" || "$SKIP_SSL" == "yes" ]] && return
+
+  log "Provisioning SSL certificate for ${DOMAIN_NAME}"
+
+  if ! command -v certbot >/dev/null 2>&1; then
+    log "Installing certbot"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y certbot python3-certbot-nginx
+  fi
+
+  local certbot_args=(--nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos --redirect)
+  if [[ -n "$SSL_EMAIL" ]]; then
+    certbot_args+=(-m "$SSL_EMAIL")
+  else
+    certbot_args+=(--register-unsafely-without-email)
+  fi
+
+  if certbot "${certbot_args[@]}"; then
+    SSL_METHOD="lets-encrypt"
+    log "Let's Encrypt certificate issued. Nginx updated to HTTPS."
+    systemctl enable certbot.timer 2>/dev/null || true
+  else
+    warn "Let's Encrypt issuance failed (DNS may not have propagated yet)."
+    warn "Falling back to a self-signed certificate."
+    _provision_self_signed
+  fi
+}
+
+_provision_self_signed() {
+  local ssl_dir="/etc/nginx/ssl/${APP_NAME}"
+  mkdir -p "$ssl_dir"
+  local key_file="$ssl_dir/server.key"
+  local crt_file="$ssl_dir/server.crt"
+
+  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout "$key_file" -out "$crt_file" \
+    -subj "/CN=${DOMAIN_NAME}" 2>/dev/null
+
+  # Replace nginx config with HTTPS self-signed block
+  cat > "/etc/nginx/sites-available/${APP_NAME}" <<NGINX
+# EKAFY — self-signed SSL fallback
+server {
+    listen 80;
+    server_name ${DOMAIN_NAME};
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${DOMAIN_NAME};
+
+    ssl_certificate     ${crt_file};
+    ssl_certificate_key ${key_file};
+
+    client_max_body_size 1m;
+
+    location / {
+        proxy_pass         http://127.0.0.1:${PORT};
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade           \$http_upgrade;
+        proxy_set_header   Connection        'upgrade';
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+NGINX
+
+  nginx -t && systemctl reload nginx
+  SSL_METHOD="self-signed"
+  warn "Self-signed certificate active. Browsers will show a security warning."
+  warn "Upgrade when DNS propagates:  sudo certbot --nginx -d ${DOMAIN_NAME}"
 }
 
 create_admin_user() {
@@ -433,35 +560,64 @@ create_admin_user() {
 }
 
 print_summary() {
-  local url="http://SERVER_IP:${PORT}/login.html"
-  if [[ "$INSTALL_NGINX" == "yes" ]]; then
-    if [[ "$DOMAIN_NAME" == "_" || -z "$DOMAIN_NAME" ]]; then
-      url="http://SERVER_IP/login.html"
+  local url proto
+  if [[ "$INSTALL_NGINX" == "yes" && -n "$DOMAIN_NAME" ]]; then
+    if [[ "$SSL_METHOD" == "lets-encrypt" || "$SSL_METHOD" == "self-signed" ]]; then
+      proto="https"
     else
-      url="http://${DOMAIN_NAME}/login.html"
+      proto="http"
     fi
+    url="${proto}://${DOMAIN_NAME}/login.html"
+  else
+    local server_ip
+    server_ip="$(hostname -I | awk '{print $1}')"
+    url="http://${server_ip}:${PORT}/login.html"
   fi
 
+  printf '\n\033[1;32m'
+  printf '╔══════════════════════════════════════════════════════════════╗\n'
+  printf '║            EKAFY — Installation Complete                     ║\n'
+  printf '╚══════════════════════════════════════════════════════════════╝\n'
+  printf '\033[0m\n'
+
   cat <<SUMMARY
+  App directory    : ${APP_DIR}
+  Systemd service  : ${SERVICE_NAME}
+  Database         : ${DB_NAME}
+  DB user          : ${DB_USER}
+  Service control  : ${ENABLE_SERVICE_CONTROL}
+  SSL method       : ${SSL_METHOD}
 
-EKAFY installation complete.
-
-App directory: ${APP_DIR}
-Systemd service: ${SERVICE_NAME}
-Database: ${DB_NAME}
-Database user: ${DB_USER}
-Service control enabled: ${ENABLE_SERVICE_CONTROL}
+  Open your panel  : ${url}
 
 Useful commands:
-  sudo systemctl status ${SERVICE_NAME}
+  sudo systemctl status   ${SERVICE_NAME}
   sudo journalctl -u ${SERVICE_NAME} -f
-  sudo systemctl restart ${SERVICE_NAME}
+  sudo systemctl restart  ${SERVICE_NAME}
 
-Open:
-  ${url}
-
-Keep ${APP_DIR}/.env private. It contains production secrets.
 SUMMARY
+
+  if [[ "$SSL_METHOD" == "self-signed" ]]; then
+    printf '\033[1;33m'
+    printf '⚠  Self-signed certificate in use.\n'
+    printf '   Browsers will show a security warning until you get a trusted cert.\n'
+    printf '\n'
+    printf '   Once DNS for "%s" points to this server, run:\n' "$DOMAIN_NAME"
+    printf '     sudo certbot --nginx -d %s\n' "$DOMAIN_NAME"
+    printf '\033[0m\n'
+  fi
+
+  if [[ "$INSTALL_NGINX" != "yes" || -z "$DOMAIN_NAME" ]]; then
+    server_ip="$(hostname -I | awk '{print $1}')"
+    printf '\033[1;36mℹ  No domain configured. EKAFY is accessible at:\033[0m\n'
+    printf '   http://%s:%s/login.html\n' "$server_ip" "$PORT"
+    printf '\n'
+    printf '   To add a domain later, re-run:\n'
+    printf '     sudo bash %s/init.sh --domain your.domain.com --ssl-email you@example.com\n' "$APP_DIR"
+    printf '\n'
+  fi
+
+  printf '  Keep %s/.env private — it contains production secrets.\n\n' "$APP_DIR"
 }
 
 main() {
@@ -471,6 +627,9 @@ main() {
 
   require_command apt-get
   require_command systemctl
+
+  # Prompt for domain interactively before any package installs
+  prompt_domain
 
   install_packages
   require_command mysql
@@ -482,6 +641,7 @@ main() {
   write_systemd_service
   configure_sudoers_for_services
   configure_nginx
+  provision_ssl        # Let's Encrypt or self-signed, after nginx is live
   create_admin_user
   print_summary
 }
