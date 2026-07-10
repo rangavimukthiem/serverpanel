@@ -214,8 +214,8 @@ async function generateNginx(req, res, next) {
     await fs.symlink(configPath, enabledPath);
 
     // Test and reload nginx
-    await execFileAsync('nginx', ['-t'], { timeout: 5000 });
-    await execFileAsync('systemctl', ['reload', 'nginx'], { timeout: 8000 });
+    await execFileAsync('sudo', ['-n', 'nginx', '-t'], { timeout: 5000 });
+    await execFileAsync('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 8000 });
 
     // Persist domain + port on the project record
     await updateProjectFields(projectId, { domain, port, nginx_config_path: configPath });

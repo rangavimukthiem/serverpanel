@@ -354,12 +354,13 @@ UNIT
 configure_sudoers_for_services() {
   [[ "$ENABLE_SERVICE_CONTROL" != "true" ]] && return
 
-  local systemctl_path
+  local systemctl_path nginx_path
   systemctl_path="$(command -v systemctl)"
+  nginx_path="$(command -v nginx || echo '/usr/sbin/nginx')"
 
-  log "Allowing EKAFY service user to control whitelisted systemd units"
+  log "Allowing EKAFY service user to control whitelisted systemd units & Nginx checks"
   cat > "/etc/sudoers.d/${APP_NAME}-services" <<SUDOERS
-${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path} stop nginx, ${systemctl_path} restart nginx, ${systemctl_path} reload nginx, ${systemctl_path} is-active --quiet nginx
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path} stop nginx, ${systemctl_path} restart nginx, ${systemctl_path} reload nginx, ${systemctl_path} is-active --quiet nginx, ${nginx_path} -t
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mysql, ${systemctl_path} stop mysql, ${systemctl_path} restart mysql, ${systemctl_path} is-active --quiet mysql
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mariadb, ${systemctl_path} stop mariadb, ${systemctl_path} restart mariadb, ${systemctl_path} is-active --quiet mariadb
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start apache2, ${systemctl_path} stop apache2, ${systemctl_path} restart apache2, ${systemctl_path} is-active --quiet apache2
