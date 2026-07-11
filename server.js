@@ -15,6 +15,7 @@ const { authenticateToken } = require('./middleware/authMiddleware');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || '0.0.0.0';
 
 app.set('trust proxy', 1);
 app.use(cors({ credentials: true, origin: true }));
@@ -48,8 +49,8 @@ async function start() {
   await testConnection();
   await ensureProjectSchema();
 
-  app.listen(port, () => {
-    console.log(`EKAFY API running on http://localhost:${port}`);
+  app.listen(port, host, () => {
+    console.log(`EKAFY API running on http://${host}:${port}`);
   });
 }
 

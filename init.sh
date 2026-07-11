@@ -292,9 +292,15 @@ write_env() {
   local env_file="$APP_DIR/.env"
   local jwt_secret
   jwt_secret="$(random_secret)"
+  local bind_host="0.0.0.0"
+
+  if [[ "$INSTALL_NGINX" == "yes" && -n "$DOMAIN_NAME" ]]; then
+    bind_host="127.0.0.1"
+  fi
 
   log "Writing production .env"
   cat > "$env_file" <<ENV
+HOST=${bind_host}
 PORT=${PORT}
 NODE_ENV=production
 
@@ -345,6 +351,7 @@ User=${APP_USER}
 Group=${APP_GROUP}
 WorkingDirectory=${APP_DIR}
 Environment=NODE_ENV=production
+EnvironmentFile=-${APP_DIR}/.env
 ExecStart=$(command -v node) ${APP_DIR}/server.js
 Restart=always
 RestartSec=5
