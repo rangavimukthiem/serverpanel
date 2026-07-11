@@ -171,6 +171,12 @@ prompt_secret() {
   printf '%s' "$value"
 }
 
+validate_domain_name() {
+  local domain="$1"
+
+  [[ "$domain" =~ ^([A-Za-z0-9-]+\.)+[A-Za-z]{2,}$ ]]
+}
+
 random_secret() {
   openssl rand -base64 48 | tr -d '\n'
 }
@@ -397,14 +403,16 @@ prompt_domain() {
   printf '\033[1;36m╚════════════════════════════════════════════════════════════╝\033[0m\n'
   printf '\n'
 
-  read -r -p "Enter your domain (e.g. panel.example.com), or press Enter to skip: " DOMAIN_NAME
-  DOMAIN_NAME="${DOMAIN_NAME// /}"
+  while true; do
+    read -r -p "Enter your public domain (e.g. panel.example.com): " DOMAIN_NAME
+    DOMAIN_NAME="${DOMAIN_NAME// /}"
 
-  if [[ -z "$DOMAIN_NAME" ]]; then
-    warn "No domain entered. EKAFY will be served on port ${PORT} without Nginx/SSL."
-    INSTALL_NGINX="no"
-    return
-  fi
+    if validate_domain_name "$DOMAIN_NAME"; then
+      break
+    fi
+
+    warn "A valid domain is required for Nginx. Example: panel.example.com"
+  done
 
   if [[ -z "$SSL_EMAIL" && "$SKIP_SSL" != "yes" ]]; then
     read -r -p "Email for Let's Encrypt notifications (Enter to skip): " SSL_EMAIL
@@ -417,9 +425,15 @@ configure_nginx() {
 
   log "Configuring Nginx reverse proxy → ${DOMAIN_NAME}:80 → 127.0.0.1:${PORT}"
 
-  # HTTP-only block first; certbot will upgrade to HTTPS automatically
+  # Default catch-all block rejects raw IP and unknown host requests.
   cat > "/etc/nginx/sites-available/${APP_NAME}" <<NGINX
 # EKAFY — managed by init.sh
+server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}
+
 server {
     listen 80;
     server_name ${DOMAIN_NAME};
@@ -504,6 +518,12 @@ _provision_self_signed() {
   cat > "/etc/nginx/sites-available/${APP_NAME}" <<NGINX
 # EKAFY — self-signed SSL fallback
 server {
+    listen 80 default_server;
+    server_name _;
+    return 444;
+}
+
+server {
     listen 80;
     server_name ${DOMAIN_NAME};
     return 301 https://\$host\$request_uri;
@@ -529,6 +549,16 @@ server {
         proxy_set_header   X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
     }
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_certificate     ${crt_file};
+    ssl_certificate_key ${key_file};
+
+    return 444;
 }
 NGINX
 
