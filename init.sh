@@ -152,6 +152,7 @@ validate_inputs() {
   [[ "$APP_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || fail "--app-user must be a valid Linux system username."
   [[ "$DB_NAME" =~ ^[A-Za-z0-9_]{1,64}$ ]] || fail "--db-name must contain only letters, numbers, and underscores."
   [[ "$DB_USER" =~ ^[A-Za-z0-9_]{1,32}$ ]] || fail "--db-user must contain only letters, numbers, and underscores."
+  [[ "$ADMIN_USERNAME" =~ ^[A-Za-z0-9_-]{3,32}$ ]] || fail "--admin-username must be 3-32 letters, numbers, underscores, or dashes."
   [[ "$PORT" =~ ^[0-9]+$ ]] || fail "--port must be numeric."
 
   if (( PORT < 1024 || PORT > 65535 )); then
@@ -489,6 +490,18 @@ configure_nginx_permissions() {
   fi
 }
 
+cleanup_nginx_sites() {
+  [[ -d /etc/nginx/sites-enabled ]] || return
+
+  log "Removing stale Nginx site links"
+
+  find /etc/nginx/sites-enabled -maxdepth 1 -type l ! -exec test -e {} \; -print -delete >/dev/null 2>&1 || true
+
+  rm -f \
+    /etc/nginx/sites-enabled/default \
+    /etc/nginx/sites-enabled/ekafy-router
+}
+
 # ── SSL via certbot (Let's Encrypt) with self-signed fallback ─────────────────
 
 provision_ssl() {
@@ -589,34 +602,28 @@ create_admin_user() {
     return
   fi
 
-  require_command curl
+  require_command node
+  require_command mysql
 
   if [[ -z "$ADMIN_PASSWORD" ]]; then
     ADMIN_PASSWORD="$(prompt_secret "First admin password for ${ADMIN_USERNAME}")"
   fi
 
-  log "Creating first admin user if it does not already exist"
+  log "Creating or updating first admin user"
   sleep 2
 
-  local payload
-  payload="$(node -e 'console.log(JSON.stringify({ username: process.argv[1], password: process.argv[2], role: "admin" }))' "$ADMIN_USERNAME" "$ADMIN_PASSWORD")"
+  local password_hash
+  password_hash="$(node -e 'const bcrypt = require("bcrypt"); const password = process.argv[1]; console.log(bcrypt.hashSync(password, 12));' "$ADMIN_PASSWORD")"
 
-  local response
-  response="$(curl -sS -o /tmp/ekafy-register-response.json -w "%{http_code}" \
-    -X POST "http://127.0.0.1:${PORT}/api/auth/register" \
-    -H "Content-Type: application/json" \
-    -d "$payload" || true)"
+  mysql "$DB_NAME" <<SQL
+INSERT INTO users (username, password, role)
+VALUES ('${ADMIN_USERNAME}', '${password_hash}', 'admin')
+ON DUPLICATE KEY UPDATE
+  password = VALUES(password),
+  role = 'admin';
+SQL
 
-  if [[ "$response" == "201" ]]; then
-    log "Admin user created: $ADMIN_USERNAME"
-  elif [[ "$response" == "409" ]]; then
-    warn "Admin user already exists: $ADMIN_USERNAME"
-  else
-    warn "Admin creation returned HTTP $response"
-    warn "Response: $(cat /tmp/ekafy-register-response.json 2>/dev/null || true)"
-  fi
-
-  rm -f /tmp/ekafy-register-response.json
+  log "Admin user ready: ${ADMIN_USERNAME}"
 }
 
 print_summary() {
@@ -700,6 +707,7 @@ main() {
   install_node_dependencies
   write_systemd_service
   configure_sudoers_for_services
+  cleanup_nginx_sites
   configure_nginx
   configure_nginx_permissions
   provision_ssl        # Let's Encrypt or self-signed, after nginx is live
