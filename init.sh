@@ -420,6 +420,22 @@ prompt_domain() {
   fi
 }
 
+prompt_nginx_setup() {
+  if [[ "$INSTALL_NGINX" == "yes" ]]; then
+    prompt_domain
+    return
+  fi
+
+  local answer=""
+  read -r -p "Do you want to configure Nginx? [y/N]: " answer
+  answer="${answer,,}"
+
+  if [[ "$answer" =~ ^(y|yes)$ ]]; then
+    INSTALL_NGINX="yes"
+    prompt_domain
+  fi
+}
+
 configure_nginx() {
   [[ "$INSTALL_NGINX" != "yes" || -z "$DOMAIN_NAME" ]] && return
 
@@ -672,8 +688,8 @@ main() {
   require_command apt-get
   require_command systemctl
 
-  # Prompt for domain interactively before any package installs
-  prompt_domain
+  # Prompt for Nginx/domain interactively before any package installs
+  prompt_nginx_setup
 
   install_packages
   require_command mysql
