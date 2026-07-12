@@ -1,13 +1,37 @@
 const mariadb = require('mariadb');
 
-const pool = mariadb.createPool({
+function createPoolFromEnv({
+  host,
+  port,
+  user,
+  password,
+  database
+}) {
+  return mariadb.createPool({
+    host: host || '127.0.0.1',
+    port: Number(port || 3306),
+    user: user || 'root',
+    password: password || '',
+    database: database || 'ekafy',
+    connectionLimit: 5,
+    acquireTimeout: 5000
+  });
+}
+
+const pool = createPoolFromEnv({
   host: process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'ekafy',
-  connectionLimit: 5,
-  acquireTimeout: 5000
+  port: process.env.DB_PORT || 3306
+});
+
+const adminPool = createPoolFromEnv({
+  host: process.env.DB_ADMIN_HOST || process.env.DB_HOST || '127.0.0.1',
+  port: process.env.DB_ADMIN_PORT || process.env.DB_PORT || 3306,
+  user: process.env.DB_ADMIN_USER || process.env.DB_USER || 'root',
+  password: process.env.DB_ADMIN_PASSWORD || process.env.DB_PASSWORD || '',
+  database: process.env.DB_ADMIN_NAME || process.env.DB_NAME || 'ekafy'
 });
 
 async function query(sql, params = []) {
@@ -15,6 +39,17 @@ async function query(sql, params = []) {
 
   try {
     connection = await pool.getConnection();
+    return await connection.query(sql, params);
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
+async function adminQuery(sql, params = []) {
+  let connection;
+
+  try {
+    connection = await adminPool.getConnection();
     return await connection.query(sql, params);
   } finally {
     if (connection) connection.release();
@@ -34,5 +69,6 @@ async function testConnection() {
 module.exports = {
   pool,
   query,
+  adminQuery,
   testConnection
 };

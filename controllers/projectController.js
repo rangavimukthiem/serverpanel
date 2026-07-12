@@ -3,12 +3,22 @@ const {
   findProjectById,
   createProject,
   updateProjectConfig,
+  deleteProjectById,
   getProjectMembership,
   upsertProjectMember,
   removeProjectMember
 } = require('../models/projectModel');
+const { getAllProjectEnvsAsObject } = require('../models/projectEnvModel');
+const { listProjectServices } = require('../models/projectServiceModel');
 const { findUserById } = require('../models/userModel');
 const { createLog } = require('../models/logModel');
+const { query, adminQuery } = require('../config/db');
+const fs = require('fs').promises;
+const path = require('path');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
 
 const PROJECT_ROLE_SET = new Set(['manager', 'user']);
 const PROJECT_KIND_SET = new Set(['static', 'database', 'api', 'full']);
@@ -16,6 +26,8 @@ const HTTP_METHOD_SET = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const DATABASE_PRESET_SET = new Set(['create-database', 'grant-access', 'create-schema', 'seed-baseline']);
 const API_PRESET_SET = new Set(['health', 'auth', 'resources', 'custom-crud']);
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
+const NGINX_SITES_AVAILABLE = '/etc/nginx/sites-available';
+const NGINX_SITES_ENABLED = '/etc/nginx/sites-enabled';
 
 function trimText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -372,6 +384,186 @@ async function deleteProjectMember(req, res, next) {
   }
 }
 
+function canUseShellCleanup() {
+  return process.platform !== 'win32';
+}
+
+function systemctlCommand(args) {
+  if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+    return { file: 'sudo', args: ['-n', ...args] };
+  }
+  return { file: args[0], args: args.slice(1) };
+}
+
+async function reloadNginxIfPossible() {
+  if (!canUseShellCleanup()) {
+    return;
+  }
+
+  const command = systemctlCommand(['systemctl', 'reload', 'nginx']);
+  await execFileAsync(command.file, command.args, { timeout: 8000 });
+}
+
+async function runSystemctl(args, timeout = 10000) {
+  const command = systemctlCommand(['systemctl', ...args]);
+  await execFileAsync(command.file, command.args, { timeout });
+}
+
+async function removePathIfExists(targetPath) {
+  await fs.rm(targetPath, { recursive: true, force: true });
+}
+
+async function cleanupProjectDatabase(envs) {
+  const databaseName = envs.DB_NAME;
+  const databaseUser = envs.DB_USER;
+  const databaseHost = envs.DB_HOST || '127.0.0.1';
+
+  if (!databaseName && !databaseUser) {
+    return null;
+  }
+
+  if (databaseName) {
+    await adminQuery(`DROP DATABASE IF EXISTS \`${databaseName}\``);
+  }
+
+  if (databaseUser) {
+    await adminQuery(`DROP USER IF EXISTS '${databaseUser}'@'${databaseHost}'`);
+  }
+
+  await adminQuery('FLUSH PRIVILEGES');
+  return { databaseName, databaseUser, databaseHost };
+}
+
+async function cleanupProjectNginx(project, warnings) {
+  const configPath = project.nginx_config_path || path.join(NGINX_SITES_AVAILABLE, project.slug);
+  const enabledPath = path.join(NGINX_SITES_ENABLED, project.slug);
+
+  try {
+    await fs.unlink(enabledPath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      warnings.push(`Nginx enabled link: ${error.message}`);
+    }
+  }
+
+  try {
+    await fs.unlink(configPath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      warnings.push(`Nginx config: ${error.message}`);
+    }
+  }
+
+  if (canUseShellCleanup()) {
+    try {
+      await reloadNginxIfPossible();
+    } catch (error) {
+      warnings.push(`Nginx reload: ${error.message}`);
+    }
+  }
+}
+
+async function cleanupProjectSsl(project, warnings) {
+  if (!project.ssl_enabled) {
+    return;
+  }
+
+  if (!canUseShellCleanup()) {
+    warnings.push('SSL certificate cleanup skipped on non-Linux host');
+    return;
+  }
+
+  const domain = project.domain || '';
+  if (!domain) {
+    return;
+  }
+
+  try {
+    await execFileAsync('certbot', ['delete', '--cert-name', domain, '--non-interactive'], { timeout: 60000 });
+  } catch (error) {
+    warnings.push(`SSL certificate cleanup: ${error.message}`);
+  }
+}
+
+async function cleanupProjectServices(projectId, warnings) {
+  if (!canUseShellCleanup()) {
+    warnings.push('Project service cleanup skipped on non-Linux host');
+    return;
+  }
+
+  const services = await listProjectServices(projectId);
+  for (const service of services) {
+    try {
+      await runSystemctl(['stop', service.service_name]);
+    } catch (error) {
+      warnings.push(`Project service stop (${service.service_name}): ${error.message}`);
+    }
+
+    try {
+      await runSystemctl(['disable', service.service_name]);
+    } catch (error) {
+      warnings.push(`Project service disable (${service.service_name}): ${error.message}`);
+    }
+  }
+}
+
+async function cleanupProjectFilesystem(project, warnings) {
+  try {
+    await removePathIfExists(project.path);
+  } catch (error) {
+    warnings.push(`Project files: ${error.message}`);
+  }
+}
+
+async function deleteProject(req, res, next) {
+  const warnings = [];
+
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required to delete a project' });
+    }
+
+    const project = await findProjectById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const envs = await getAllProjectEnvsAsObject(projectId);
+
+    await cleanupProjectDatabase(envs).catch((error) => {
+      warnings.push(`Database cleanup: ${error.message}`);
+    });
+
+    await cleanupProjectNginx(project, warnings);
+    await cleanupProjectSsl(project, warnings);
+    await cleanupProjectServices(projectId, warnings);
+    await cleanupProjectFilesystem(project, warnings);
+
+    const deleted = await deleteProjectById(projectId);
+    if (!deleted) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    await createLog({
+      userId: req.user.id,
+      action: `deleted project ${project.name} and removed project resources`
+    }).catch(() => {});
+
+    return res.json({
+      message: 'Project deleted',
+      projectId,
+      warnings
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function canManageProjectMembers(user, projectId, assignedRole) {
   if (user.role === 'admin') {
     return true;
@@ -410,5 +602,6 @@ module.exports = {
   updateProjectWizardConfig,
   getProjectWizard,
   setProjectMember,
-  deleteProjectMember
+  deleteProjectMember,
+  deleteProject
 };

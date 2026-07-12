@@ -246,6 +246,16 @@ async function updateProjectConfig(id, config) {
   return findProjectById(id);
 }
 
+/**
+ * Permanently delete a project record.
+ * Child records in project_members, project_envs, and project_services
+ * cascade automatically through foreign keys.
+ */
+async function deleteProjectById(id) {
+  const result = await query('DELETE FROM projects WHERE id = ?', [id]);
+  return Number(result.affectedRows || 0) > 0;
+}
+
 // ─── Project membership ───────────────────────────────────────────────────────
 
 async function getProjectMembership(projectId, userId) {
@@ -308,6 +318,7 @@ module.exports = {
   createProject,
   updateProjectConfig,
   updateProjectFields,
+  deleteProjectById,
   getProjectMembership,
   upsertProjectMember,
   removeProjectMember,

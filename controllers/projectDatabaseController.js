@@ -17,7 +17,7 @@ const crypto  = require('crypto');
 
 const { findProjectById, getProjectMembership } = require('../models/projectModel');
 const { upsertProjectEnv, getAllProjectEnvsAsObject, writeProjectEnvFile } = require('../models/projectEnvModel');
-const { query } = require('../config/db');
+const { query, adminQuery } = require('../config/db');
 const { createLog } = require('../models/logModel');
 const { AppError } = require('../errors/AppError');
 
@@ -181,10 +181,10 @@ async function provision(req, res, next) {
     const dbHost = process.env.DB_HOST || '127.0.0.1';
 
     // Run setup using the EKAFY admin DB connection
-    await query(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    await query(`CREATE USER IF NOT EXISTS '${dbUser}'@'${dbHost}' IDENTIFIED BY '${dbPassword}'`);
-    await query(`GRANT ALL PRIVILEGES ON \`${databaseName}\`.* TO '${dbUser}'@'${dbHost}'`);
-    await query('FLUSH PRIVILEGES');
+    await adminQuery(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    await adminQuery(`CREATE USER IF NOT EXISTS '${dbUser}'@'${dbHost}' IDENTIFIED BY '${dbPassword}'`);
+    await adminQuery(`GRANT ALL PRIVILEGES ON \`${databaseName}\`.* TO '${dbUser}'@'${dbHost}'`);
+    await adminQuery('FLUSH PRIVILEGES');
 
     // Save credentials to project_envs
     await upsertProjectEnv(projectId, 'DB_HOST', dbHost);
@@ -209,6 +209,13 @@ async function provision(req, res, next) {
       // Password intentionally NOT returned — it is in the .env file
     });
   } catch (error) {
+    if (error?.errno === 1044 || error?.code === 'ER_DBACCESS_DENIED_ERROR') {
+      return next(new AppError(
+        'Database provisioning requires privileged MariaDB credentials. Set DB_ADMIN_USER and DB_ADMIN_PASSWORD in .env (or grant CREATE/CREATE USER/GRANT privileges to the configured admin account).',
+        500,
+        'DB_ADMIN_PRIVILEGE_REQUIRED'
+      ));
+    }
     return next(new AppError(
       `Database provisioning failed: ${error.message}`,
       500,

@@ -1,6 +1,6 @@
 # EKAFY — API & Function Reference
 
-> Last updated: v0.2.0 — Full project management expansion
+> Last updated: v0.2.1 — Project delete cleanup
 
 All endpoints require a valid session cookie (`ekafy_token`) or `Authorization: Bearer <token>` header unless otherwise noted.
 
@@ -56,6 +56,7 @@ All endpoints require a valid session cookie (`ekafy_token`) or `Authorization: 
 |---|---|---|---|
 | `/api/projects` | GET | User | List projects (admin sees all; users see assigned projects) |
 | `/api/projects` | POST | **Admin** | Create a new project |
+| `/api/projects/:id` | DELETE | **Admin** | Permanently delete a project and purge its configs, files, services, SSL, and database details |
 | `/api/projects/:id/wizard` | GET | Member | Get project wizard config and DB/API wizard output |
 | `/api/projects/:id/config` | PATCH | Manager | Update project wizard config (kind, db, api, presets, notes) |
 | `/api/projects/:id/members` | PUT | Manager | Assign a user to a project with a role |
@@ -241,7 +242,7 @@ server.js                            ← Express app, boot, error handler
 │   ├── authController.js
 │   ├── systemController.js
 │   ├── userController.js
-│   ├── projectController.js         ← Core CRUD + wizard config
+│   ├── projectController.js         ← Core CRUD + wizard config + delete cleanup
 │   ├── projectSetupController.js    ← scaffold / nginx / ssl
 │   ├── projectDatabaseController.js ← provision / tables / SQL query
 │   ├── projectGitController.js      ← init / clone / pull / push / status
@@ -309,6 +310,7 @@ public/
 - All shell commands use `execFile` — never template strings passed to a shell.
 - `ENABLE_SERVICE_CONTROL=true` must be explicitly set; all shell ops are gated.
 - SQL query tool whitelists statement prefixes; blocks destructive admin commands.
+- Database provisioning and project cleanup use privileged MariaDB credentials from `DB_ADMIN_*` when set; the normal app account in `DB_*` can remain least-privilege.
 - Env variable values are **never returned** over the API; only key names + timestamps are listed.
 - DB credentials (auto-generated password) are stored in `project_envs` and written to the `.env` file; never appear in API responses.
 - Project service control validates that the service is registered in `project_services` for that project before running `systemctl`.

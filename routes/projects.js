@@ -15,7 +15,8 @@ const {
   updateProjectWizardConfig,
   getProjectWizard,
   setProjectMember,
-  deleteProjectMember
+  deleteProjectMember,
+  deleteProject
 } = require('../controllers/projectController');
 
 const { scaffold, generateNginx, provisionSsl } = require('../controllers/projectSetupController');
@@ -38,6 +39,7 @@ const router = express.Router();
 // ── Core project CRUD ────────────────────────────────────────────────────────
 router.get('/',    listProjects);
 router.post('/',   requireAdmin, createManagedProject);
+router.delete('/:id', requireAdmin, deleteProject);
 
 // ── Wizard config ────────────────────────────────────────────────────────────
 router.get('/:id/wizard',  getProjectWizard);
