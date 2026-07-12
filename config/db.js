@@ -1,4 +1,5 @@
 const mariadb = require('mariadb');
+const fs = require('fs');
 
 function createPoolFromEnv({
   host,
@@ -33,11 +34,50 @@ const pool = createPoolFromEnv({
   port: process.env.DB_PORT || 3306
 });
 
+function hasValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function socketExists(socketPath) {
+  if (!socketPath || process.platform === 'win32') return false;
+
+  try {
+    return fs.existsSync(socketPath);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function addCandidate(candidates, seen, candidate) {
+  const key = candidate.socketPath
+    ? `socket:${candidate.socketPath}:${candidate.user}:${candidate.database}`
+    : `tcp:${candidate.host}:${candidate.port}:${candidate.user}:${candidate.database}`;
+
+  if (seen.has(key)) return;
+  seen.add(key);
+  candidates.push(candidate);
+}
+
+function addSocketCandidate(candidates, seen, socketPath, user, password, database) {
+  if (!socketExists(socketPath)) return;
+
+  addCandidate(candidates, seen, {
+    socketPath,
+    user,
+    password,
+    database
+  });
+}
+
 function getAdminConnectionCandidates() {
   const candidates = [];
+  const seen = new Set();
   const adminHost = process.env.DB_ADMIN_HOST || process.env.DB_HOST || '127.0.0.1';
   const adminPort = process.env.DB_ADMIN_PORT || process.env.DB_PORT || 3306;
   const adminDatabase = process.env.DB_ADMIN_NAME || process.env.DB_NAME || 'ekafy';
+  const adminUser = process.env.DB_ADMIN_USER || 'root';
+  const adminPassword = process.env.DB_ADMIN_PASSWORD || '';
+  const adminSocket = process.env.DB_ADMIN_SOCKET || process.env.MARIADB_SOCKET || '';
   const explicitAdmin =
     process.env.DB_ADMIN_USER ||
     process.env.DB_ADMIN_PASSWORD ||
@@ -47,16 +87,26 @@ function getAdminConnectionCandidates() {
     process.env.DB_ADMIN_SOCKET;
 
   if (explicitAdmin) {
-    candidates.push({
+    addSocketCandidate(candidates, seen, adminSocket, adminUser, adminPassword, adminDatabase);
+    addCandidate(candidates, seen, {
       host: adminHost,
       port: Number(adminPort),
-      user: process.env.DB_ADMIN_USER || 'root',
-      password: process.env.DB_ADMIN_PASSWORD || '',
-      database: adminDatabase,
-      socketPath: process.env.DB_ADMIN_SOCKET || process.env.MARIADB_SOCKET || ''
+      user: adminUser,
+      password: adminPassword,
+      database: adminDatabase
     });
   } else {
-    candidates.push({
+    if (hasValue(process.env.DB_USER)) {
+      addCandidate(candidates, seen, {
+        host: adminHost,
+        port: Number(adminPort),
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD || '',
+        database: adminDatabase
+      });
+    }
+
+    addCandidate(candidates, seen, {
       host: adminHost,
       port: Number(adminPort),
       user: 'root',
@@ -68,18 +118,18 @@ function getAdminConnectionCandidates() {
       const socketCandidates = [
         process.env.DB_ADMIN_SOCKET,
         process.env.MARIADB_SOCKET,
+        '/tmp/mysql.sock',
+        '/var/run/mysql/mysql.sock',
         '/var/run/mysqld/mysqld.sock',
         '/run/mysqld/mysqld.sock',
-        '/var/lib/mysql/mysql.sock'
+        '/var/run/mariadb/mariadb.sock',
+        '/run/mariadb/mariadb.sock',
+        '/var/lib/mysql/mysql.sock',
+        '/usr/local/var/mysql/mysql.sock'
       ].filter(Boolean);
 
       for (const socketPath of socketCandidates) {
-        candidates.push({
-          socketPath,
-          user: 'root',
-          password: '',
-          database: adminDatabase
-        });
+        addSocketCandidate(candidates, seen, socketPath, 'root', '', adminDatabase);
       }
     }
   }

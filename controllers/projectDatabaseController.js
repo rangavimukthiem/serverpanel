@@ -153,6 +153,24 @@ const SQL_PRESETS = [
  * Creates the MariaDB database and user using the EKAFY admin connection.
  * Saves credentials to project_envs and writes .env to disk.
  */
+function isAdminPrivilegeError(error) {
+  const privilegeErrorCodes = new Set([
+    'ER_ACCESS_DENIED_ERROR',
+    'ER_DBACCESS_DENIED_ERROR',
+    'ER_SPECIFIC_ACCESS_DENIED_ERROR',
+    'ER_TABLEACCESS_DENIED_ERROR',
+    'ER_COLUMNACCESS_DENIED_ERROR',
+    'ER_PROCACCESS_DENIED_ERROR'
+  ]);
+  const privilegeErrnos = new Set([1044, 1045, 1142, 1143, 1227, 1370]);
+
+  return privilegeErrorCodes.has(error?.code) || privilegeErrnos.has(Number(error?.errno));
+}
+
+function isMissingSocketError(error) {
+  return error?.code === 'ENOENT' && /\.sock\b/.test(error?.message || '');
+}
+
 async function provision(req, res, next) {
   try {
     const projectId = Number(req.params.id);
@@ -179,6 +197,7 @@ async function provision(req, res, next) {
     // Auto-generate a secure 24-char password
     const dbPassword = crypto.randomBytes(18).toString('base64').replace(/[+/=]/g, 'x');
     const dbHost = process.env.DB_HOST || '127.0.0.1';
+    const dbPort = String(process.env.DB_PORT || 3306);
 
     // Run setup using the EKAFY admin DB connection
     await adminQuery(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
@@ -188,7 +207,7 @@ async function provision(req, res, next) {
 
     // Save credentials to project_envs
     await upsertProjectEnv(projectId, 'DB_HOST', dbHost);
-    await upsertProjectEnv(projectId, 'DB_PORT', '3306');
+    await upsertProjectEnv(projectId, 'DB_PORT', dbPort);
     await upsertProjectEnv(projectId, 'DB_NAME', databaseName);
     await upsertProjectEnv(projectId, 'DB_USER', dbUser);
     await upsertProjectEnv(projectId, 'DB_PASSWORD', dbPassword);
@@ -209,9 +228,16 @@ async function provision(req, res, next) {
       // Password intentionally NOT returned — it is in the .env file
     });
   } catch (error) {
-    if (error?.errno === 1044 || error?.code === 'ER_DBACCESS_DENIED_ERROR') {
+    if (isMissingSocketError(error)) {
       return next(new AppError(
-        'Database provisioning could not reach a privileged MariaDB account. Set DB_ADMIN_USER and DB_ADMIN_PASSWORD in .env if the server does not allow root/socket admin access, or grant CREATE/CREATE USER/GRANT privileges to the configured admin account.',
+        'Database provisioning could not find the configured MariaDB socket. Remove stale DB_ADMIN_SOCKET/MARIADB_SOCKET values from .env or set DB_ADMIN_HOST, DB_ADMIN_PORT, DB_ADMIN_USER, and DB_ADMIN_PASSWORD.',
+        500,
+        'DB_ADMIN_SOCKET_NOT_FOUND'
+      ));
+    }
+    if (isAdminPrivilegeError(error)) {
+      return next(new AppError(
+        'Database provisioning could not use a privileged MariaDB account. Set DB_ADMIN_USER and DB_ADMIN_PASSWORD in .env to an account with CREATE, CREATE USER, and GRANT OPTION privileges, then restart EKAFY.',
         500,
         'DB_ADMIN_PRIVILEGE_REQUIRED'
       ));
