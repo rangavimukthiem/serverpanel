@@ -211,7 +211,7 @@ async function provision(req, res, next) {
   } catch (error) {
     if (error?.errno === 1044 || error?.code === 'ER_DBACCESS_DENIED_ERROR') {
       return next(new AppError(
-        'Database provisioning requires privileged MariaDB credentials. Set DB_ADMIN_USER and DB_ADMIN_PASSWORD in .env (or grant CREATE/CREATE USER/GRANT privileges to the configured admin account).',
+        'Database provisioning could not reach a privileged MariaDB account. Set DB_ADMIN_USER and DB_ADMIN_PASSWORD in .env if the server does not allow root/socket admin access, or grant CREATE/CREATE USER/GRANT privileges to the configured admin account.',
         500,
         'DB_ADMIN_PRIVILEGE_REQUIRED'
       ));
