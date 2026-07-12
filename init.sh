@@ -9,6 +9,7 @@ APP_GROUP="ekafy"
 SERVICE_NAME="ekafy"
 DB_NAME="ekafy"
 DB_USER="ekafy"
+DB_ADMIN_USER="ekafy_admin"
 PORT="3000"
 NODE_MAJOR="20"
 INSTALL_NGINX="no"
@@ -272,20 +273,25 @@ setup_mariadb() {
   log "Configuring MariaDB"
   systemctl enable --now mariadb
 
-  local db_password
+  local db_password db_admin_password
   db_password="$(random_secret)"
+  db_admin_password="$(random_secret)"
 
   mysql <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${db_password}';
-ALTER USER '${DB_USER}'@'localhost' IDENTIFIED BY '${db_password}';
-GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
+CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${db_password}';
+ALTER USER '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${db_password}';
+GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
+CREATE USER IF NOT EXISTS '${DB_ADMIN_USER}'@'127.0.0.1' IDENTIFIED BY '${db_admin_password}';
+ALTER USER '${DB_ADMIN_USER}'@'127.0.0.1' IDENTIFIED BY '${db_admin_password}';
+GRANT ALL PRIVILEGES ON *.* TO '${DB_ADMIN_USER}'@'127.0.0.1' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 SQL
 
   mysql "$DB_NAME" < "$APP_DIR/database.sql"
 
   DB_PASSWORD="$db_password"
+  DB_ADMIN_PASSWORD="$db_admin_password"
 }
 
 write_env() {
@@ -309,6 +315,10 @@ DB_PORT=3306
 DB_USER=${DB_USER}
 DB_PASSWORD=${DB_PASSWORD}
 DB_NAME=${DB_NAME}
+DB_ADMIN_HOST=127.0.0.1
+DB_ADMIN_PORT=3306
+DB_ADMIN_USER=${DB_ADMIN_USER}
+DB_ADMIN_PASSWORD=${DB_ADMIN_PASSWORD}
 
 JWT_SECRET=${jwt_secret}
 JWT_EXPIRES_IN=8h
