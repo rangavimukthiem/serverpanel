@@ -427,7 +427,15 @@ async function cleanupProjectDatabase(envs) {
   }
 
   if (databaseUser) {
-    await adminQuery(`DROP USER IF EXISTS '${databaseUser}'@'${databaseHost}'`);
+    const accountHosts = new Set([databaseHost]);
+    if (databaseHost === 'localhost' || databaseHost === '127.0.0.1') {
+      accountHosts.add('localhost');
+      accountHosts.add('127.0.0.1');
+    }
+
+    for (const accountHost of accountHosts) {
+      await adminQuery(`DROP USER IF EXISTS '${databaseUser}'@'${accountHost}'`);
+    }
   }
 
   await adminQuery('FLUSH PRIVILEGES');

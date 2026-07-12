@@ -21,6 +21,9 @@ const { query, adminQuery } = require('../config/db');
 const { createLog } = require('../models/logModel');
 const { AppError } = require('../errors/AppError');
 
+const LOCAL_DB_HOST = '127.0.0.1';
+const LOCAL_DB_ACCOUNT_HOSTS = ['localhost', '127.0.0.1'];
+
 // ─── SQL statement allowlist ───────────────────────────────────────────────────
 
 const ALLOWED_STATEMENT_PREFIXES = new Set([
@@ -77,7 +80,16 @@ async function canView(user, projectId) {
 async function getProjectDbConnection(projectId) {
   const envs = await getAllProjectEnvsAsObject(projectId);
 
-  const host     = envs.DB_HOST     || '127.0.0.1';
+  const configuredHost = envs.DB_HOST || LOCAL_DB_HOST;
+  if (!LOCAL_DB_ACCOUNT_HOSTS.includes(configuredHost)) {
+    throw new AppError(
+      'Project database host must be localhost or 127.0.0.1.',
+      400,
+      'DB_HOST_UNSUPPORTED'
+    );
+  }
+
+  const host     = LOCAL_DB_HOST;
   const port     = Number(envs.DB_PORT || 3306);
   const user     = envs.DB_USER;
   const password = envs.DB_PASSWORD;
@@ -196,13 +208,16 @@ async function provision(req, res, next) {
 
     // Auto-generate a secure 24-char password
     const dbPassword = crypto.randomBytes(18).toString('base64').replace(/[+/=]/g, 'x');
-    const dbHost = process.env.DB_HOST || '127.0.0.1';
+    const dbHost = LOCAL_DB_HOST;
     const dbPort = String(process.env.DB_PORT || 3306);
 
     // Run setup using the EKAFY admin DB connection
     await adminQuery(`CREATE DATABASE IF NOT EXISTS \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    await adminQuery(`CREATE USER IF NOT EXISTS '${dbUser}'@'${dbHost}' IDENTIFIED BY '${dbPassword}'`);
-    await adminQuery(`GRANT ALL PRIVILEGES ON \`${databaseName}\`.* TO '${dbUser}'@'${dbHost}'`);
+    for (const accountHost of LOCAL_DB_ACCOUNT_HOSTS) {
+      await adminQuery(`CREATE USER IF NOT EXISTS '${dbUser}'@'${accountHost}' IDENTIFIED BY '${dbPassword}'`);
+      await adminQuery(`ALTER USER '${dbUser}'@'${accountHost}' IDENTIFIED BY '${dbPassword}'`);
+      await adminQuery(`GRANT ALL PRIVILEGES ON \`${databaseName}\`.* TO '${dbUser}'@'${accountHost}'`);
+    }
     await adminQuery('FLUSH PRIVILEGES');
 
     // Save credentials to project_envs
