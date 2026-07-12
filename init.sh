@@ -279,9 +279,15 @@ setup_mariadb() {
 
   mysql <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${db_password}';
+ALTER USER '${DB_USER}'@'localhost' IDENTIFIED BY '${db_password}';
+GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
 CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${db_password}';
 ALTER USER '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${db_password}';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';
+CREATE USER IF NOT EXISTS '${DB_ADMIN_USER}'@'localhost' IDENTIFIED BY '${db_admin_password}';
+ALTER USER '${DB_ADMIN_USER}'@'localhost' IDENTIFIED BY '${db_admin_password}';
+GRANT ALL PRIVILEGES ON *.* TO '${DB_ADMIN_USER}'@'localhost' WITH GRANT OPTION;
 CREATE USER IF NOT EXISTS '${DB_ADMIN_USER}'@'127.0.0.1' IDENTIFIED BY '${db_admin_password}';
 ALTER USER '${DB_ADMIN_USER}'@'127.0.0.1' IDENTIFIED BY '${db_admin_password}';
 GRANT ALL PRIVILEGES ON *.* TO '${DB_ADMIN_USER}'@'127.0.0.1' WITH GRANT OPTION;
