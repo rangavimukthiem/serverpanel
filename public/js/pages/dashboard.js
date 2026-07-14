@@ -81,6 +81,13 @@ function initDashboardModule(label, initFn) {
   }
 }
 
+function startSystemStatusLoop() {
+  loadStatus().catch((e) => handleStatusError(e, 'Loading system status'));
+  setInterval(() => {
+    loadStatus().catch((e) => handleStatusError(e, 'Refreshing system status'));
+  }, 5000);
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function bootDashboard() {
@@ -129,6 +136,7 @@ async function bootDashboard() {
   syncDashboardTabState();
   window.addEventListener('hashchange', syncDashboardTabState);
   if (!window.location.hash) window.location.hash = '#dashboard';
+  startSystemStatusLoop();
 
   initDashboardModule('Project wizard', setupProjectWizard);
   initDashboardModule('Project list', bindProjectListClicks);
@@ -139,12 +147,9 @@ async function bootDashboard() {
   await loadProjects();
   if (user.role === 'admin') loadUsers();
 
-  // System metrics loop
-  loadStatus().catch((e) => handleStatusError(e, 'Loading system status'));
-  setInterval(() => {
-    loadStatus().catch((e) => handleStatusError(e, 'Refreshing system status'));
-  }, 5000);
-
 }
 
-bootDashboard();
+bootDashboard().catch((error) => {
+  console.error('Dashboard boot failed', error);
+  reportGlobalError(error, 'Dashboard');
+});
