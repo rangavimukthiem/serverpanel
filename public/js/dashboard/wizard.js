@@ -202,7 +202,7 @@ export function readProjectWizardConfig() {
   const form = getProjectForm();
   if (!form) return null;
 
-  const runtime = form.elements.runtime.value;
+  const runtime = form.elements.runtime?.value || 'static-site';
   const option = projectRuntimeMap[runtime] || projectRuntimeMap['static-site'];
   const kind = runtimeToKind(runtime);
   const database = {
@@ -332,7 +332,7 @@ export function setupProjectWizard() {
   resetEndpointRowCount(endpointList ? endpointList.children.length : 0);
   form.dataset.ready = 'true';
 
-  form.elements.runtime.addEventListener('change', syncProjectWizardVisibility);
+  form.elements.runtime?.addEventListener('change', syncProjectWizardVisibility);
 
   if (addEndpointButton && endpointList) {
     addEndpointButton.addEventListener('click', () => {

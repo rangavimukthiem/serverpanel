@@ -15,6 +15,7 @@ import { bindAdminForms } from '../dashboard/forms.js';
 import { setupProjectWizard } from '../dashboard/wizard.js';
 import { initProjectDetail } from '../dashboard/projectDetail.js';
 import { loadStatus, handleStatusError } from '../dashboard/status.js';
+import { reportGlobalError } from '../shared/errors.js';
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -71,6 +72,15 @@ function syncDashboardTabState() {
   if (activeTab === 'access')    { loadUsers(); }
 }
 
+function initDashboardModule(label, initFn) {
+  try {
+    initFn();
+  } catch (error) {
+    console.error(`${label} init failed`, error);
+    reportGlobalError(error, label);
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function bootDashboard() {
@@ -116,10 +126,14 @@ async function bootDashboard() {
   }
 
   // ── Init modules ────────────────────────────────────────────────────────────
-  setupProjectWizard();   // Wizard preset/endpoint behaviour in the create modal
-  bindProjectListClicks(); // Project card → detail drawer
-  initProjectDetail();    // Detail drawer tabs and content
-  bindAdminForms();       // User + project create + member forms
+  syncDashboardTabState();
+  window.addEventListener('hashchange', syncDashboardTabState);
+  if (!window.location.hash) window.location.hash = '#dashboard';
+
+  initDashboardModule('Project wizard', setupProjectWizard);
+  initDashboardModule('Project list', bindProjectListClicks);
+  initDashboardModule('Project detail', initProjectDetail);
+  initDashboardModule('Admin forms', bindAdminForms);
 
   // Initial data load
   await loadProjects();
@@ -131,10 +145,6 @@ async function bootDashboard() {
     loadStatus().catch((e) => handleStatusError(e, 'Refreshing system status'));
   }, 5000);
 
-  // Tab routing
-  syncDashboardTabState();
-  window.addEventListener('hashchange', syncDashboardTabState);
-  if (!window.location.hash) window.location.hash = '#dashboard';
 }
 
 bootDashboard();
