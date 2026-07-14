@@ -7,6 +7,7 @@ import { reportGlobalError } from '../shared/errors.js';
 import { escapeHtml } from '../shared/dom.js';
 import { redirectOnAuthError, isAdmin } from '../shared/auth.js';
 import { dashboardState } from './state.js';
+import { projectRuntimeMap } from './constants.js';
 
 // ── Event system ──────────────────────────────────────────────────────────────
 
@@ -33,6 +34,11 @@ function kindBadge(kind) {
   return `<span class="kind-badge">${escapeHtml(kind || 'static')}</span>`;
 }
 
+function runtimeBadge(runtime) {
+  const option = projectRuntimeMap[runtime] || projectRuntimeMap['static-site'];
+  return `<span class="kind-badge">${escapeHtml(option.label)}</span>`;
+}
+
 // ── Card render ───────────────────────────────────────────────────────────────
 
 function renderProjectCard(project, isSelected) {
@@ -49,6 +55,7 @@ function renderProjectCard(project, isSelected) {
       </div>
       ${domain}
       <div class="project-card-tags">
+        ${runtimeBadge(project.config?.runtime)}
         ${kindBadge(project.config?.kind)}
         ${project.port ? `<span class="status-badge badge-inactive">:${project.port}</span>` : ''}
         ${ssl}

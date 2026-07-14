@@ -138,6 +138,7 @@
                   <div class="info-card"><span class="info-label">Domain</span><strong id="ovDomain">—</strong></div>
                   <div class="info-card"><span class="info-label">Port</span><strong id="ovPort">—</strong></div>
                   <div class="info-card"><span class="info-label">Type</span><strong id="ovKind">—</strong></div>
+                  <div class="info-card"><span class="info-label">Runtime</span><strong id="ovRuntime">—</strong></div>
                   <div class="info-card"><span class="info-label">Path</span><code id="ovPath">—</code></div>
                   <div class="info-card"><span class="info-label">Branch</span><strong id="ovBranch">—</strong></div>
                 </div>
@@ -186,11 +187,16 @@
                     </div>
                     <div class="inline-form setup-inline">
                       <input id="setupDomain" type="text"   placeholder="app.example.com">
-                      <input id="setupPort"   type="number" placeholder="Port (e.g. 4001)" min="1024" max="65535">
-                      <select id="setupNginxType">
-                        <option value="proxy">Reverse Proxy</option>
-                        <option value="static">Static Files</option>
+                      <select id="setupRuntime">
+                        <option value="static-site">Static HTML/CSS/JS</option>
+                        <option value="static-api">Static site + API</option>
+                        <option value="node-app">Node.js app/API</option>
+                        <option value="python-api">Python API/app</option>
+                        <option value="php-site">PHP site</option>
+                        <option value="wordpress-site">WordPress/WooCommerce</option>
                       </select>
+                      <input id="setupPort" type="number" placeholder="App/API port" min="1024" max="65535">
+                      <input id="setupPhpSocket" type="text" placeholder="/run/php/php8.1-fpm.sock">
                     </div>
                     <button id="runNginx" type="button">Generate Nginx Config</button>
                   </div>
@@ -200,7 +206,7 @@
                       <span class="step-num">3</span>
                       <div>
                         <h4>SSL Certificate</h4>
-                        <p>Certbot (Let's Encrypt) with self-signed fallback.</p>
+                        <p>Certbot (Let's Encrypt) for trusted origin SSL.</p>
                       </div>
                       <span class="status-badge" id="sslBadge">—</span>
                     </div>
@@ -397,23 +403,25 @@
             </div>
             <div class="wizard-form-grid">
               <input name="domain"     type="text"   placeholder="app.example.com (optional)">
-              <input name="port"       type="number" placeholder="App port (e.g. 4001)" min="1024" max="65535">
+              <input name="port"       type="number" placeholder="Backend/API port (e.g. 4001)" min="1024" max="65535">
               <input name="gitRepoUrl" type="text"   placeholder="git@github.com:user/repo.git (optional)">
               <input name="gitBranch"  type="text"   placeholder="Branch (default: main)" value="main">
             </div>
           </div>
 
-          <!-- Project type -->
+          <!-- Project runtime -->
           <div class="wizard-section">
             <div class="wizard-heading">
-              <h4>Project Type</h4>
-              <p>Choose which modules the wizard should prepare.</p>
+              <h4>Project Runtime</h4>
+              <p>Choose how Nginx and the project environment should be prepared.</p>
             </div>
-            <select name="kind" required>
-              <option value="static">Static project</option>
-              <option value="database">Database-backed project</option>
-              <option value="api">API-backed project</option>
-              <option value="full">Full-stack project</option>
+            <select name="runtime" required>
+              <option value="static-site">Static HTML/CSS/JS</option>
+              <option value="static-api">Static site + API backend</option>
+              <option value="node-app">Node.js app/API</option>
+              <option value="python-api">Python API/app</option>
+              <option value="php-site">PHP site</option>
+              <option value="wordpress-site">WordPress/WooCommerce</option>
             </select>
           </div>
 
@@ -442,6 +450,12 @@
               <div class="preset-row" data-endpoint-preset-row style="margin-top:10px"></div>
               <div class="endpoint-list" data-endpoint-list style="margin-top:8px"></div>
               <button class="ghost-button" type="button" data-add-endpoint style="margin-top:8px">+ Endpoint</button>
+            </fieldset>
+
+            <fieldset class="wizard-card php-wizard" style="margin-top:14px">
+              <legend>PHP Runtime</legend>
+              <p class="wizard-note">Used for PHP, WordPress, and WooCommerce sites.</p>
+              <input name="php.fpmSocket" type="text" placeholder="/run/php/php8.1-fpm.sock" value="/run/php/php8.1-fpm.sock" style="width:100%">
             </fieldset>
           </div>
 

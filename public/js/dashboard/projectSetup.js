@@ -5,6 +5,7 @@
 import { api } from '../shared/api.js';
 import { escapeHtml } from '../shared/dom.js';
 import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
+import { projectRuntimeMap } from './constants.js';
 
 // ── Terminal helper ───────────────────────────────────────────────────────────
 
@@ -30,14 +31,49 @@ function setBadge(id, text, cls) {
   el.className = `status-badge ${cls}`;
 }
 
+function formatApiDetails(error) {
+  const details = error?.details;
+  if (!details) return '';
+  if (typeof details === 'string') return details;
+
+  return [details.stderr, details.stdout, details.message]
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+function syncRuntimeFields(runtime) {
+  const option = projectRuntimeMap[runtime] || projectRuntimeMap['static-site'];
+  const portInput = document.getElementById('setupPort');
+  const phpSocketInput = document.getElementById('setupPhpSocket');
+
+  if (portInput) {
+    portInput.disabled = !option.needsPort;
+    if (!option.needsPort) portInput.value = '';
+  }
+
+  if (phpSocketInput) {
+    phpSocketInput.disabled = !option.needsPhp;
+    if (!option.needsPhp) phpSocketInput.value = '';
+    if (option.needsPhp && !phpSocketInput.value) {
+      phpSocketInput.value = '/run/php/php8.1-fpm.sock';
+    }
+  }
+}
+
 // ── Tab init ──────────────────────────────────────────────────────────────────
 
 export function loadSetupTab(project) {
   // Pre-fill domain and port from project record
   const domainInput = document.getElementById('setupDomain');
   const portInput   = document.getElementById('setupPort');
+  const runtimeSelect = document.getElementById('setupRuntime');
+  const phpSocketInput = document.getElementById('setupPhpSocket');
   if (domainInput) domainInput.value = project.domain || '';
   if (portInput)   portInput.value   = project.port   || '';
+  if (runtimeSelect) runtimeSelect.value = project.config?.runtime || 'static-site';
+  if (phpSocketInput) phpSocketInput.value = project.config?.php?.fpmSocket || '/run/php/php8.1-fpm.sock';
+  syncRuntimeFields(runtimeSelect?.value || 'static-site');
 
   // Set badges based on what we know
   setBadge('scaffoldBadge', project.status === 'active' ? '—' : '✓ Done', project.status === 'provisioned' ? 'badge-provisioned' : 'badge-inactive');
@@ -81,12 +117,20 @@ function bindSetupButtons(project) {
   if (nginxBtn) {
     const fresh = nginxBtn.cloneNode(true);
     nginxBtn.replaceWith(fresh);
+    const runtimeSelect = document.getElementById('setupRuntime');
+    if (runtimeSelect) {
+      runtimeSelect.onchange = () => syncRuntimeFields(runtimeSelect.value);
+    }
     fresh.addEventListener('click', async () => {
       const domain = document.getElementById('setupDomain')?.value.trim();
       const port   = document.getElementById('setupPort')?.value.trim();
-      const type   = document.getElementById('setupNginxType')?.value || 'proxy';
+      const runtime = document.getElementById('setupRuntime')?.value || 'static-site';
+      const phpFpmSocket = document.getElementById('setupPhpSocket')?.value.trim();
+      const option = projectRuntimeMap[runtime] || projectRuntimeMap['static-site'];
 
       if (!domain) { writeOutput('setupOutput', '✗ Domain is required', 'err'); return; }
+      if (option.needsPort && !port) { writeOutput('setupOutput', '✗ App/API port is required for this runtime', 'err'); return; }
+      if (option.needsPhp && !phpFpmSocket) { writeOutput('setupOutput', '✗ PHP-FPM socket is required for this runtime', 'err'); return; }
 
       clearOutput('setupOutput');
       fresh.disabled = true;
@@ -94,11 +138,17 @@ function bindSetupButtons(project) {
       try {
         const data = await api(`/api/projects/${project.id}/setup/nginx`, {
           method: 'POST',
-          body: JSON.stringify({ domain, port: Number(port) || undefined, type })
+          body: JSON.stringify({
+            domain,
+            runtime,
+            port: option.needsPort ? Number(port) : undefined,
+            phpFpmSocket: option.needsPhp ? phpFpmSocket : undefined
+          })
         });
         writeOutput('setupOutput', data.message, 'ok');
         writeOutput('setupOutput', `  Config: ${data.configPath}`);
         writeOutput('setupOutput', `  Domain: ${data.domain}`);
+        writeOutput('setupOutput', `  Runtime: ${data.runtime}`);
         setBadge('nginxBadge', '✓ Done', 'badge-active');
         showGlobalMessage('Nginx configuration generated and reloaded!', 'success');
         window.dispatchEvent(new CustomEvent('projectRefreshNeeded'));
@@ -130,6 +180,8 @@ function bindSetupButtons(project) {
         window.dispatchEvent(new CustomEvent('projectRefreshNeeded'));
       } catch (err) {
         writeOutput('setupOutput', `✗ ${err.message}`, 'err');
+        const details = formatApiDetails(err);
+        if (details) writeOutput('setupOutput', details, 'err');
         reportGlobalError(err, 'SSL provisioning');
       } finally {
         fresh.disabled = false;

@@ -16,6 +16,7 @@ import { loadDatabaseTab } from './projectDatabase.js';
 import { loadGitTab } from './projectGit.js';
 import { loadEndpointsTab } from './projectEndpoints.js';
 import { loadServicesTab } from './projectServices.js';
+import { projectRuntimeMap } from './constants.js';
 
 // Track which tabs have been loaded for the current project
 const loadedTabs = new Set();
@@ -69,6 +70,7 @@ function renderOverview(project) {
   set('ovDomain', project.domain);
   set('ovPort',   project.port ? `:${project.port}` : null);
   set('ovKind',   project.config?.kind || 'static');
+  set('ovRuntime', projectRuntimeMap[project.config?.runtime]?.label || 'Static HTML/CSS/JS');
   set('ovBranch', project.git_branch || 'main');
 
   const ovPath = document.getElementById('ovPath');

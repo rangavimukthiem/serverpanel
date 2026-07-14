@@ -931,7 +931,7 @@ label {
 }
 
 .setup-inline {
-  grid-template-columns: 1.4fr 120px 140px;
+  grid-template-columns: 1.3fr 1.2fr 120px 1.4fr;
 }
 
 /* ─── Terminal output ──────────────────────────────────────────────────────── */

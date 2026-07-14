@@ -88,15 +88,16 @@ All endpoints require a valid session cookie (`ekafy_token`) or `Authorization: 
 |---|---|---|---|
 | `/api/projects/:id/setup/scaffold` | POST | Manager | Create folder tree + seed .env file |
 | `/api/projects/:id/setup/nginx` | POST | Manager | Generate nginx server block, enable, reload |
-| `/api/projects/:id/setup/ssl` | POST | Manager | Provision SSL (certbot or self-signed fallback) |
+| `/api/projects/:id/setup/ssl` | POST | Manager | Provision SSL with Certbot; self-signed fallback only when explicitly enabled |
 
 **Scaffold** creates: `public/` `logs/` `releases/` `shared/` `config/` `.env`
 
 **Nginx body:**
 ```json
-{ "domain": "app.example.com", "port": 4001, "type": "proxy" }
+{ "domain": "app.example.com", "runtime": "node-app", "port": 4001 }
 ```
-`type` can be `"proxy"` (default — reverse-proxy to localhost:port) or `"static"` (serve `public/` folder).
+`runtime` can be `static-site`, `static-api`, `node-app`, `python-api`, `php-site`, or `wordpress-site`.
+Static projects use Nginx `root`, Node/Python/API projects use localhost `proxy_pass`, and PHP/WordPress projects use `fastcgi_pass`.
 
 **Requires:** `ENABLE_SERVICE_CONTROL=true` in `.env` and a Linux host.
 

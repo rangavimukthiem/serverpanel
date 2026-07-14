@@ -14,6 +14,10 @@ const { query } = require('../config/db');
 
 const DEFAULT_PROJECT_CONFIG = {
   kind: 'static',
+  runtime: 'static-site',
+  php: {
+    fpmSocket: '/run/php/php8.1-fpm.sock'
+  },
   database: {
     enabled: false,
     provider: 'mariadb',
@@ -46,6 +50,7 @@ function parseProjectConfig(rawConfig) {
     return {
       ...defaults,
       ...parsed,
+      php: { ...defaults.php, ...(parsed.php || {}) },
       database: { ...defaults.database, ...(parsed.database || {}) },
       api: {
         ...defaults.api,

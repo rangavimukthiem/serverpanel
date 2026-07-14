@@ -16,6 +16,7 @@ INSTALL_NGINX="no"
 DOMAIN_NAME=""
 SSL_EMAIL=""
 SKIP_SSL="no"
+ALLOW_SELF_SIGNED_SSL="false"
 CREATE_ADMIN="yes"
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD=""
@@ -45,6 +46,7 @@ Options:
   --domain DOMAIN             Configure Nginx + SSL for this domain (skips interactive prompt)
   --ssl-email EMAIL           Email for Let's Encrypt notifications
   --skip-ssl                  Set up Nginx but skip SSL certificate provisioning
+  --allow-self-signed-ssl     Allow self-signed SSL fallback when Let's Encrypt fails
   --install-nginx             Prompt for domain and configure Nginx reverse proxy
   --no-admin                  Skip first admin user creation
   --admin-username USER       First admin username. Default: admin
@@ -101,6 +103,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-ssl)
       SKIP_SSL="yes"
+      shift
+      ;;
+    --allow-self-signed-ssl)
+      ALLOW_SELF_SIGNED_SSL="true"
       shift
       ;;
     --install-nginx)
@@ -204,7 +210,7 @@ install_packages() {
   fi
 
   if [[ "$INSTALL_NGINX" == "yes" ]]; then
-    apt-get install -y nginx
+    apt-get install -y nginx certbot python3-certbot-nginx
   fi
 }
 
@@ -331,6 +337,9 @@ JWT_EXPIRES_IN=8h
 ALLOW_REGISTRATION=false
 
 ENABLE_SERVICE_CONTROL=${ENABLE_SERVICE_CONTROL}
+ALLOW_SELF_SIGNED_SSL=${ALLOW_SELF_SIGNED_SSL}
+PROJECTS_ROOT=/srv
+PHP_FPM_SOCKET=/run/php/php8.1-fpm.sock
 ENV
 
   # Append SSL email so projectSetupController can use it for per-project certs
@@ -384,9 +393,10 @@ UNIT
 configure_sudoers_for_services() {
   [[ "$ENABLE_SERVICE_CONTROL" != "true" ]] && return
 
-  local systemctl_path nginx_path
+  local systemctl_path nginx_path certbot_path
   systemctl_path="$(command -v systemctl)"
   nginx_path="$(command -v nginx || echo '/usr/sbin/nginx')"
+  certbot_path="$(command -v certbot || echo '/usr/bin/certbot')"
 
   log "Allowing EKAFY service user to control whitelisted systemd units & Nginx checks"
   cat > "/etc/sudoers.d/${APP_NAME}-services" <<SUDOERS
@@ -394,6 +404,9 @@ ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mysql, ${systemctl_path} stop mysql, ${systemctl_path} restart mysql, ${systemctl_path} is-active --quiet mysql
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mariadb, ${systemctl_path} stop mariadb, ${systemctl_path} restart mariadb, ${systemctl_path} is-active --quiet mariadb
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start apache2, ${systemctl_path} stop apache2, ${systemctl_path} restart apache2, ${systemctl_path} is-active --quiet apache2
+${APP_USER} ALL=(root) NOPASSWD: ${certbot_path} --nginx -d * --non-interactive --agree-tos --redirect -m *
+${APP_USER} ALL=(root) NOPASSWD: ${certbot_path} --nginx -d * --non-interactive --agree-tos --redirect --register-unsafely-without-email
+${APP_USER} ALL=(root) NOPASSWD: ${certbot_path} delete --cert-name * --non-interactive
 SUDOERS
   chmod 440 "/etc/sudoers.d/${APP_NAME}-services"
   visudo -cf "/etc/sudoers.d/${APP_NAME}-services" >/dev/null
@@ -422,8 +435,8 @@ prompt_domain() {
   printf '\033[1;36m║\033[0m   TTL   : \033[1;33m300\033[0m  (5 min, raise to 3600 later)                \033[1;36m║\033[0m\n'
   printf '\033[1;36m║\033[0m                                                            \033[1;36m║\033[0m\n'
   printf '\033[1;36m║\033[0m  DNS changes take 1–30 min to propagate.                   \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m  If the record is not live yet, SSL will fall back to a   \033[1;36m║\033[0m\n'
-  printf '\033[1;36m║\033[0m  self-signed certificate (browser will show a warning).   \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m  If the record is not live yet, SSL issuance will fail.    \033[1;36m║\033[0m\n'
+  printf '\033[1;36m║\033[0m  Retry Certbot after DNS points to this server.            \033[1;36m║\033[0m\n'
   printf '\033[1;36m╚════════════════════════════════════════════════════════════╝\033[0m\n'
   printf '\n'
 
@@ -525,7 +538,7 @@ cleanup_nginx_sites() {
     /etc/nginx/sites-enabled/ekafy-router
 }
 
-# ── SSL via certbot (Let's Encrypt) with self-signed fallback ─────────────────
+# ── SSL via certbot (Let's Encrypt) ───────────────────────────────────────────
 
 provision_ssl() {
   [[ "$INSTALL_NGINX" != "yes" || -z "$DOMAIN_NAME" || "$SKIP_SSL" == "yes" ]] && return
@@ -551,8 +564,14 @@ provision_ssl() {
     systemctl enable certbot.timer 2>/dev/null || true
   else
     warn "Let's Encrypt issuance failed (DNS may not have propagated yet)."
-    warn "Falling back to a self-signed certificate."
-    _provision_self_signed
+    if [[ "$ALLOW_SELF_SIGNED_SSL" == "true" ]]; then
+      warn "Falling back to a self-signed certificate because --allow-self-signed-ssl was set."
+      _provision_self_signed
+    else
+      SSL_METHOD="none"
+      warn "No self-signed certificate was installed. Cloudflare Full (strict) requires a trusted origin certificate."
+      warn "Retry after DNS propagates: sudo certbot --nginx -d ${DOMAIN_NAME}"
+    fi
   fi
 }
 
@@ -733,7 +752,7 @@ main() {
   cleanup_nginx_sites
   configure_nginx
   configure_nginx_permissions
-  provision_ssl        # Let's Encrypt or self-signed, after nginx is live
+  provision_ssl        # Let's Encrypt, after nginx is live
   create_admin_user
   print_summary
 }

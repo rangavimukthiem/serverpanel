@@ -25,6 +25,19 @@ export const apiEndpointPresetMap = {
   'custom-crud':{ name: 'CRUD',       method: 'POST', path: '/items',        description: 'Replace with your resource path' }
 };
 
+export const projectRuntimeOptions = [
+  { value: 'static-site', label: 'Static HTML/CSS/JS', needsPort: false, needsPhp: false, hasApi: false, hasDatabase: false },
+  { value: 'static-api', label: 'Static site + API', needsPort: true, needsPhp: false, hasApi: true, hasDatabase: false },
+  { value: 'node-app', label: 'Node.js app/API', needsPort: true, needsPhp: false, hasApi: true, hasDatabase: false },
+  { value: 'python-api', label: 'Python API/app', needsPort: true, needsPhp: false, hasApi: true, hasDatabase: false },
+  { value: 'php-site', label: 'PHP site', needsPort: false, needsPhp: true, hasApi: false, hasDatabase: false },
+  { value: 'wordpress-site', label: 'WordPress/WooCommerce', needsPort: false, needsPhp: true, hasApi: false, hasDatabase: true }
+];
+
+export const projectRuntimeMap = Object.fromEntries(
+  projectRuntimeOptions.map((option) => [option.value, option])
+);
+
 /** SQL editor presets (used in the project Database tab) */
 export const sqlEditorPresets = [
   {

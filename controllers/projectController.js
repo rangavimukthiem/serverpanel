@@ -22,10 +22,16 @@ const execFileAsync = promisify(execFile);
 
 const PROJECT_ROLE_SET = new Set(['manager', 'user']);
 const PROJECT_KIND_SET = new Set(['static', 'database', 'api', 'full']);
+const PROJECT_RUNTIME_SET = new Set(['static-site', 'node-app', 'python-api', 'php-site', 'wordpress-site', 'static-api']);
+const DATABASE_RUNTIME_SET = new Set(['wordpress-site']);
+const API_RUNTIME_SET = new Set(['node-app', 'python-api', 'static-api']);
 const HTTP_METHOD_SET = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const DATABASE_PRESET_SET = new Set(['create-database', 'grant-access', 'create-schema', 'seed-baseline']);
 const API_PRESET_SET = new Set(['health', 'auth', 'resources', 'custom-crud']);
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,78}[a-z0-9]$/;
+const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const PHP_FPM_SOCKET_PATTERN = /^\/run\/php\/php\d+\.\d+-fpm\.sock$/;
+const PROJECTS_ROOT = process.env.PROJECTS_ROOT || '/srv';
 const NGINX_SITES_AVAILABLE = '/etc/nginx/sites-available';
 const NGINX_SITES_ENABLED = '/etc/nginx/sites-enabled';
 
@@ -36,6 +42,33 @@ function trimText(value) {
 function normalizeProjectKind(kind) {
   const value = (trimText(kind) || 'static').toLowerCase();
   return PROJECT_KIND_SET.has(value) ? value : null;
+}
+
+function normalizeProjectRuntime(runtime) {
+  const value = (trimText(runtime) || 'static-site').toLowerCase();
+  return PROJECT_RUNTIME_SET.has(value) ? value : null;
+}
+
+function deriveKindFromRuntime(runtime, requestedKind) {
+  if (DATABASE_RUNTIME_SET.has(runtime)) return 'database';
+  if (API_RUNTIME_SET.has(runtime)) return 'api';
+  return requestedKind && PROJECT_KIND_SET.has(requestedKind) ? requestedKind : 'static';
+}
+
+function normalizeProjectPath(projectPath) {
+  const value = trimText(projectPath);
+  if (!value || !value.startsWith('/') || value.length > 255) return null;
+
+  const normalized = path.posix.normalize(value);
+  const root = path.posix.normalize(PROJECTS_ROOT);
+  if (normalized === root || !normalized.startsWith(`${root}/`)) return null;
+  if (normalized.includes('/../')) return null;
+
+  return normalized;
+}
+
+function validateDomainName(domain) {
+  return !domain || DOMAIN_PATTERN.test(domain);
 }
 
 function normalizeDatabaseConfig(database = {}) {
@@ -78,13 +111,23 @@ function normalizeQueryPresets(queryPresets = []) {
 }
 
 function buildProjectConfig(input = {}) {
-  const kind = normalizeProjectKind(input.kind);
+  const runtime = normalizeProjectRuntime(input.runtime || input.deploymentType || input.type);
+  if (!runtime) {
+    return null;
+  }
+
+  const requestedKind = normalizeProjectKind(input.kind);
+  const kind = deriveKindFromRuntime(runtime, requestedKind);
   if (!kind) {
     return null;
   }
 
   const config = {
     kind,
+    runtime,
+    php: {
+      fpmSocket: trimText(input.php?.fpmSocket) || '/run/php/php8.1-fpm.sock'
+    },
     database: normalizeDatabaseConfig(input.database),
     api: normalizeApiConfig(input.api),
     queryPresets: normalizeQueryPresets(input.queryPresets),
@@ -106,6 +149,18 @@ function buildProjectConfig(input = {}) {
 
   if (kind === 'full') {
     config.database.enabled = true;
+    config.api.enabled = true;
+  }
+
+  if (runtime === 'wordpress-site') {
+    config.database.enabled = true;
+  }
+
+  if (runtime === 'node-app' || runtime === 'python-api') {
+    config.api.enabled = true;
+  }
+
+  if (runtime === 'static-api') {
     config.api.enabled = true;
   }
 
@@ -168,14 +223,18 @@ function validateProjectConfig(projectConfig) {
     return 'Invalid project wizard configuration';
   }
 
-  const { kind, database, api } = projectConfig;
+  const { kind, runtime, database, api } = projectConfig;
+
+  if (!PROJECT_RUNTIME_SET.has(runtime)) {
+    return 'Invalid project runtime';
+  }
+
+  if ((runtime === 'php-site' || runtime === 'wordpress-site') && !PHP_FPM_SOCKET_PATTERN.test(projectConfig.php?.fpmSocket || '')) {
+    return 'PHP-FPM socket must look like /run/php/php8.1-fpm.sock';
+  }
 
   if ((kind === 'database' || kind === 'full') && (!database.databaseName || !database.username)) {
     return 'Database-backed projects require a database name and database user';
-  }
-
-  if ((kind === 'api' || kind === 'full') && (!api.baseUrl || !Array.isArray(api.endpoints) || api.endpoints.length === 0)) {
-    return 'API-backed projects require a base URL and at least one endpoint';
   }
 
   return null;
@@ -192,7 +251,7 @@ async function listProjects(req, res, next) {
 
 async function createManagedProject(req, res, next) {
   try {
-    const { name, slug, path, status = 'active', domain, port, gitRepoUrl, gitBranch = 'main' } = req.body;
+    const { name, slug, status = 'active', domain, port, gitRepoUrl, gitBranch = 'main' } = req.body;
     const projectConfig = buildProjectConfig(req.body.config || req.body);
 
     if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 120) {
@@ -203,8 +262,14 @@ async function createManagedProject(req, res, next) {
       return res.status(400).json({ message: 'Slug must be lowercase letters, numbers, and dashes' });
     }
 
-    if (typeof path !== 'string' || !path.startsWith('/') || path.length > 255) {
-      return res.status(400).json({ message: 'Project path must be an absolute path (starting with /)' });
+    const projectPath = normalizeProjectPath(req.body.path);
+    if (!projectPath) {
+      return res.status(400).json({ message: `Project path must be inside ${PROJECTS_ROOT}` });
+    }
+
+    const normalizedDomain = domain ? String(domain).trim().toLowerCase() : null;
+    if (!validateDomainName(normalizedDomain)) {
+      return res.status(400).json({ message: 'Project domain must be a valid hostname' });
     }
 
     const configError = validateProjectConfig(projectConfig);
@@ -212,14 +277,25 @@ async function createManagedProject(req, res, next) {
       return res.status(400).json({ message: configError });
     }
 
+    const runtimeRequiresPort = projectConfig.runtime === 'node-app' || projectConfig.runtime === 'python-api' || projectConfig.runtime === 'static-api';
+    const submittedPort = port ? Number(port) : null;
+    const normalizedPort = runtimeRequiresPort ? submittedPort : null;
+    if (submittedPort && (!Number.isInteger(submittedPort) || submittedPort < 1024 || submittedPort > 65535)) {
+      return res.status(400).json({ message: 'Project port must be between 1024 and 65535' });
+    }
+
+    if (runtimeRequiresPort && !normalizedPort) {
+      return res.status(400).json({ message: 'This runtime requires a private app/API port' });
+    }
+
     const project = await createProject({
       name: name.trim(),
       slug,
-      path,
+      path: projectPath,
       status,
       config: projectConfig,
-      domain:     domain     ? String(domain).trim()     : null,
-      port:       port       ? Number(port)              : null,
+      domain:     normalizedDomain,
+      port:       normalizedPort,
       gitRepoUrl: gitRepoUrl ? String(gitRepoUrl).trim() : null,
       gitBranch:  gitBranch  ? String(gitBranch).trim()  : 'main'
     });
@@ -388,11 +464,15 @@ function canUseShellCleanup() {
   return process.platform !== 'win32';
 }
 
-function systemctlCommand(args) {
+function rootCommand(args) {
   if (typeof process.getuid === 'function' && process.getuid() !== 0) {
     return { file: 'sudo', args: ['-n', ...args] };
   }
   return { file: args[0], args: args.slice(1) };
+}
+
+function systemctlCommand(args) {
+  return rootCommand(args);
 }
 
 async function reloadNginxIfPossible() {
@@ -487,7 +567,8 @@ async function cleanupProjectSsl(project, warnings) {
   }
 
   try {
-    await execFileAsync('certbot', ['delete', '--cert-name', domain, '--non-interactive'], { timeout: 60000 });
+    const command = rootCommand(['certbot', 'delete', '--cert-name', domain, '--non-interactive']);
+    await execFileAsync(command.file, command.args, { timeout: 60000 });
   } catch (error) {
     warnings.push(`SSL certificate cleanup: ${error.message}`);
   }

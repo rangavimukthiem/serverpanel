@@ -6,7 +6,7 @@
  * Three-phase project infrastructure setup:
  *   Phase 1 — Folder scaffold  (pure Node fs, no shell)
  *   Phase 2 — Nginx config     (template → write → nginx reload via execFile)
- *   Phase 3 — SSL certificate  (certbot, falls back to self-signed openssl)
+ *   Phase 3 — SSL certificate  (certbot, optional self-signed fallback)
  *
  * All operations are idempotent and gated by ENABLE_SERVICE_CONTROL=true on Linux.
  */
@@ -17,8 +17,8 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const { findProjectById, updateProjectFields } = require('../models/projectModel');
-const { writeProjectEnvFile, upsertProjectEnv } = require('../models/projectEnvModel');
+const { findProjectById, updateProjectFields, updateProjectConfig } = require('../models/projectModel');
+const { writeProjectEnvFile, upsertProjectEnv, deleteProjectEnv } = require('../models/projectEnvModel');
 const { getProjectMembership } = require('../models/projectModel');
 const { createLog } = require('../models/logModel');
 const { AppError } = require('../errors/AppError');
@@ -30,6 +30,12 @@ const SCAFFOLD_DIRS = ['public', 'logs', 'releases', 'shared', 'config'];
 
 const NGINX_SITES_AVAILABLE = '/etc/nginx/sites-available';
 const NGINX_SITES_ENABLED   = '/etc/nginx/sites-enabled';
+const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
+const PROJECT_RUNTIME_SET = new Set(['static-site', 'node-app', 'python-api', 'php-site', 'wordpress-site', 'static-api']);
+const PORT_RUNTIME_SET = new Set(['node-app', 'python-api', 'static-api']);
+const PHP_RUNTIME_SET = new Set(['php-site', 'wordpress-site']);
+const PHP_FPM_SOCKET_PATTERN = /^\/run\/php\/php\d+\.\d+-fpm\.sock$/;
+const DEFAULT_PHP_FPM_SOCKET = process.env.PHP_FPM_SOCKET || '/run/php/php8.1-fpm.sock';
 
 // ─── Access guards ────────────────────────────────────────────────────────────
 
@@ -53,6 +59,59 @@ function requireServiceControl(res) {
     return false;
   }
   return true;
+}
+
+function validateDomainName(domain) {
+  return DOMAIN_PATTERN.test(domain);
+}
+
+function normalizeRuntime(value, fallbackRuntime, legacyType) {
+  if (legacyType === 'static') return 'static-site';
+  if (legacyType === 'proxy') return 'node-app';
+
+  const runtime = (value || fallbackRuntime || 'static-site').trim();
+  return PROJECT_RUNTIME_SET.has(runtime) ? runtime : null;
+}
+
+function validatePort(port) {
+  return Number.isInteger(port) && port >= 1024 && port <= 65535;
+}
+
+function kindForRuntime(runtime, fallbackKind = 'static') {
+  if (runtime === 'wordpress-site') return 'database';
+  if (runtime === 'static-api') return 'api';
+  if (runtime === 'node-app' || runtime === 'python-api') return 'api';
+  return fallbackKind || 'static';
+}
+
+function normalizePhpFpmSocket(value) {
+  const socket = (value || DEFAULT_PHP_FPM_SOCKET).trim();
+  return PHP_FPM_SOCKET_PATTERN.test(socket) ? socket : null;
+}
+
+function rootCommand(command, args = []) {
+  if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+    return { file: 'sudo', args: ['-n', command, ...args] };
+  }
+
+  return { file: command, args };
+}
+
+function runRootCommand(command, args, options) {
+  const cmd = rootCommand(command, args);
+  return execFileAsync(cmd.file, cmd.args, options);
+}
+
+function allowSelfSignedSslFallback() {
+  return process.env.ALLOW_SELF_SIGNED_SSL === 'true';
+}
+
+function commandErrorDetails(error) {
+  return {
+    stdout: (error.stdout || '').trim(),
+    stderr: (error.stderr || '').trim(),
+    message: error.message
+  };
 }
 
 // ─── Phase 1: Folder scaffold ─────────────────────────────────────────────────
@@ -84,10 +143,23 @@ async function scaffold(req, res, next) {
       created.push(fullPath);
     }
 
-    // Seed initial env vars (port, slug, etc.) if not already set
+    const runtime = normalizeRuntime(null, project.config?.runtime);
+
+    // Seed initial env vars (runtime, port, slug, etc.) if not already set
     await upsertProjectEnv(projectId, 'PROJECT_SLUG', project.slug);
+    if (runtime) await upsertProjectEnv(projectId, 'PROJECT_RUNTIME', runtime);
     if (project.domain) await upsertProjectEnv(projectId, 'PROJECT_DOMAIN', project.domain);
-    if (project.port)   await upsertProjectEnv(projectId, 'PORT', String(project.port));
+    if (runtime && PORT_RUNTIME_SET.has(runtime) && project.port) {
+      await upsertProjectEnv(projectId, 'PORT', String(project.port));
+    } else {
+      await deleteProjectEnv(projectId, 'PORT');
+    }
+
+    if (runtime && PHP_RUNTIME_SET.has(runtime)) {
+      await upsertProjectEnv(projectId, 'PHP_FPM_SOCKET', project.config?.php?.fpmSocket || DEFAULT_PHP_FPM_SOCKET);
+    } else {
+      await deleteProjectEnv(projectId, 'PHP_FPM_SOCKET');
+    }
 
     // Write .env file to disk
     await writeProjectEnvFile(projectId, project.path);
@@ -165,10 +237,144 @@ server {
 `;
 }
 
+function buildSecurityLocations() {
+  return String.raw`
+    location ~ /\.(?!well-known/) {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~* (^|/)(\.env|\.git|\.svn|\.hg|composer\.(json|lock)|package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|secrets?\.(json|ya?ml)|config\.(json|ya?ml|php)|.*\.(sql|bak|old|save|swp|dist))$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+`;
+}
+
+function buildProxyLocation(pathPrefix, port) {
+  return `
+    location ${pathPrefix} {
+        proxy_pass         http://127.0.0.1:${port};
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        'upgrade';
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+`;
+}
+
+function buildStaticRootLocations(projectPath, spaFallback = true) {
+  const fallback = spaFallback ? '/index.html' : '=404';
+  return `
+    root ${projectPath}/public;
+    index index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ ${fallback};
+    }
+`;
+}
+
+function buildPhpLocations(runtime, projectPath, phpFpmSocket) {
+  const frontController = runtime === 'wordpress-site' ? '/index.php?$args' : '/index.php?$query_string';
+  return String.raw`
+    root ${projectPath}/public;
+    index index.php index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ ${frontController};
+    }
+
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:${phpFpmSocket};
+    }
+`;
+}
+
+function buildRuntimeNginxConfig(runtime, { slug, domain, port, projectPath, phpFpmSocket }) {
+  const logDir = projectPath + '/logs';
+  const securityLocations = buildSecurityLocations();
+
+  if (runtime === 'static-site') {
+    return `# EKAFY - ${slug} (static-site)
+server {
+    listen 80;
+    server_name ${domain};
+
+    client_max_body_size 10m;
+${buildStaticRootLocations(projectPath)}
+${securityLocations}
+
+    access_log ${logDir}/access.log;
+    error_log  ${logDir}/error.log;
+}
+`;
+  }
+
+  if (runtime === 'static-api') {
+    return `# EKAFY - ${slug} (static frontend + API proxy -> 127.0.0.1:${port})
+server {
+    listen 80;
+    server_name ${domain};
+
+    client_max_body_size 25m;
+${securityLocations}
+${buildProxyLocation('/api/', port)}
+${buildStaticRootLocations(projectPath)}
+
+    access_log ${logDir}/access.log;
+    error_log  ${logDir}/error.log;
+}
+`;
+  }
+
+  if (PHP_RUNTIME_SET.has(runtime)) {
+    return `# EKAFY - ${slug} (${runtime} -> PHP-FPM)
+server {
+    listen 80;
+    server_name ${domain};
+
+    client_max_body_size 64m;
+${securityLocations}
+${buildPhpLocations(runtime, projectPath, phpFpmSocket)}
+
+    access_log ${logDir}/access.log;
+    error_log  ${logDir}/error.log;
+}
+`;
+  }
+
+  return `# EKAFY - ${slug} (${runtime} proxy -> 127.0.0.1:${port})
+server {
+    listen 80;
+    server_name ${domain};
+
+    client_max_body_size 25m;
+${securityLocations}
+${buildProxyLocation('/', port)}
+
+    access_log ${logDir}/access.log;
+    error_log  ${logDir}/error.log;
+}
+`;
+}
+
 /**
  * POST /api/projects/:id/setup/nginx
  *
- * Body: { domain?, port?, type? ('proxy'|'static') }
+ * Body: { domain?, port?, runtime?, phpFpmSocket? }
  *
  * Generates the nginx server block, writes it to sites-available, creates the
  * symlink in sites-enabled, tests the config, and reloads nginx.
@@ -189,19 +395,37 @@ async function generateNginx(req, res, next) {
       return res.status(403).json({ message: 'Project manager access required' });
     }
 
-    const domain = (req.body.domain || project.domain || '').trim();
-    const port   = Number(req.body.port || project.port || 3000);
-    const type   = req.body.type === 'static' || project.config?.kind === 'static' ? 'static' : 'proxy';
+    const domain = (req.body.domain || project.domain || '').trim().toLowerCase();
+    const runtime = normalizeRuntime(req.body.runtime, project.config?.runtime, req.body.type);
+    const port = Number(req.body.port || project.port || 0);
+    const phpFpmSocket = normalizePhpFpmSocket(req.body.phpFpmSocket || project.config?.php?.fpmSocket);
 
     if (!domain) {
       return res.status(400).json({ message: 'A domain name is required to generate nginx config' });
     }
 
-    const configContent = buildNginxConfig(type, {
+    if (!validateDomainName(domain)) {
+      return res.status(400).json({ message: 'A valid domain name is required for nginx config' });
+    }
+
+    if (!runtime) {
+      return res.status(400).json({ message: 'A valid project runtime is required' });
+    }
+
+    if (PORT_RUNTIME_SET.has(runtime) && !validatePort(port)) {
+      return res.status(400).json({ message: 'This runtime requires an app/API port between 1024 and 65535' });
+    }
+
+    if (PHP_RUNTIME_SET.has(runtime) && !phpFpmSocket) {
+      return res.status(400).json({ message: 'PHP-FPM socket must look like /run/php/php8.1-fpm.sock' });
+    }
+
+    const configContent = buildRuntimeNginxConfig(runtime, {
       slug: project.slug,
       domain,
       port,
-      projectPath: project.path
+      projectPath: project.path,
+      phpFpmSocket
     });
 
     const configPath  = path.join(NGINX_SITES_AVAILABLE, project.slug);
@@ -214,13 +438,30 @@ async function generateNginx(req, res, next) {
     await fs.symlink(configPath, enabledPath);
 
     // Test and reload nginx
-    await execFileAsync('sudo', ['-n', 'nginx', '-t'], { timeout: 5000 });
-    await execFileAsync('sudo', ['-n', 'systemctl', 'reload', 'nginx'], { timeout: 8000 });
+    await runRootCommand('nginx', ['-t'], { timeout: 5000 });
+    await runRootCommand('systemctl', ['reload', 'nginx'], { timeout: 8000 });
 
     // Persist domain + port on the project record
-    await updateProjectFields(projectId, { domain, port, nginx_config_path: configPath });
+    await updateProjectFields(projectId, {
+      domain,
+      port: PORT_RUNTIME_SET.has(runtime) ? port : null,
+      nginx_config_path: configPath
+    });
+    await updateProjectConfig(projectId, {
+      ...project.config,
+      kind: kindForRuntime(runtime, project.config?.kind),
+      runtime,
+      php: {
+        ...(project.config?.php || {}),
+        fpmSocket: phpFpmSocket || project.config?.php?.fpmSocket || DEFAULT_PHP_FPM_SOCKET
+      }
+    });
     await upsertProjectEnv(projectId, 'PROJECT_DOMAIN', domain);
-    await upsertProjectEnv(projectId, 'PORT', String(port));
+    await upsertProjectEnv(projectId, 'PROJECT_RUNTIME', runtime);
+    if (PORT_RUNTIME_SET.has(runtime)) await upsertProjectEnv(projectId, 'PORT', String(port));
+    else await deleteProjectEnv(projectId, 'PORT');
+    if (PHP_RUNTIME_SET.has(runtime)) await upsertProjectEnv(projectId, 'PHP_FPM_SOCKET', phpFpmSocket);
+    else await deleteProjectEnv(projectId, 'PHP_FPM_SOCKET');
     await writeProjectEnvFile(projectId, project.path);
 
     await createLog({ userId: req.user.id, action: `generated nginx config for project ${project.name} (${domain})` });
@@ -229,7 +470,7 @@ async function generateNginx(req, res, next) {
       message: 'Nginx config written and nginx reloaded',
       configPath,
       domain,
-      type
+      runtime
     });
   } catch (error) {
     return next(new AppError(
@@ -247,7 +488,7 @@ async function generateNginx(req, res, next) {
  * POST /api/projects/:id/setup/ssl
  *
  * Attempts Let's Encrypt via certbot --nginx.
- * Falls back to a self-signed certificate if certbot fails or is unavailable.
+ * Falls back to a self-signed certificate only when ALLOW_SELF_SIGNED_SSL=true.
  */
 async function provisionSsl(req, res, next) {
   try {
@@ -270,17 +511,34 @@ async function provisionSsl(req, res, next) {
       return res.status(400).json({ message: 'Domain must be set before provisioning SSL. Run nginx setup first.' });
     }
 
-    const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
+    if (!validateDomainName(domain)) {
+      return res.status(400).json({ message: 'A valid domain name is required for SSL provisioning' });
+    }
+
+const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
     let method = 'certbot';
     let output = '';
 
     try {
       // Attempt Let's Encrypt
-      const args = ['--nginx', '-d', domain, '--non-interactive', '--agree-tos'];
+      const args = ['--nginx', '-d', domain, '--non-interactive', '--agree-tos', '--redirect'];
       if (email) args.push('-m', email);
-      const result = await execFileAsync('certbot', args, { timeout: 60000 });
+      else args.push('--register-unsafely-without-email');
+
+      const result = await runRootCommand('certbot', args, { timeout: 120000 });
       output = result.stdout;
     } catch (certbotError) {
+      if (!allowSelfSignedSslFallback()) {
+        await updateProjectFields(projectId, { ssl_enabled: 0 });
+
+        return next(new AppError(
+          'Let\'s Encrypt SSL provisioning failed. No self-signed certificate was installed because Cloudflare Full (strict) requires a trusted origin certificate.',
+          503,
+          'CERTBOT_FAILED',
+          commandErrorDetails(certbotError)
+        ));
+      }
+
       // Fall back to self-signed using openssl
       method = 'self-signed';
       const sslDir  = path.join(project.path, 'ssl');

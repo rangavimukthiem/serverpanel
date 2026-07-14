@@ -103,6 +103,8 @@ After the first admin is created, disable or restrict open registration before p
 - Service control accepts only whitelisted services and actions.
 - Project wizard settings are stored in the project config JSON and generate safe SQL/API templates instead of executing raw user input.
 - `systemctl` service control is disabled unless `ENABLE_SERVICE_CONTROL=true`.
+- Project SSL provisioning uses Let's Encrypt via Certbot. Keep `ALLOW_SELF_SIGNED_SSL=false` when using Cloudflare Full (strict).
+- Project runtimes are explicit: static files use Nginx `root`, Node/Python apps use localhost `proxy_pass`, and PHP/WordPress use PHP-FPM.
 - First-user registration is allowed for bootstrap; after that, registration is disabled unless `ALLOW_REGISTRATION=true`.
 - The frontend no longer stores JWTs in `localStorage`; browser sessions use a signed `httpOnly` cookie. For higher-security deployments, consider CSRF protection and shorter token TTLs.
 

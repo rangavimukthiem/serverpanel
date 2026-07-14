@@ -1,5 +1,5 @@
 import { escapeHtml } from '../shared/dom.js';
-import { databaseQueryPresets, apiEndpointPresets, apiEndpointPresetMap } from './constants.js';
+import { databaseQueryPresets, apiEndpointPresets, apiEndpointPresetMap, projectRuntimeMap } from './constants.js';
 import { nextEndpointRowId, resetEndpointRowCount, dashboardState } from './state.js';
 
 // ── Auto-fill utilities ───────────────────────────────────────────────────────
@@ -64,6 +64,12 @@ function clearAutoFillState(form) {
 
 const AUTO_FIELD_NAMES = ['slug', 'path', 'port', 'database.databaseName', 'database.username'];
 
+function runtimeToKind(runtime) {
+  if (runtime === 'wordpress-site') return 'database';
+  if (runtime === 'static-api' || runtime === 'node-app' || runtime === 'python-api') return 'api';
+  return 'static';
+}
+
 function getField(form, name) {
   return form.querySelector(`[name="${name}"]`);
 }
@@ -87,10 +93,12 @@ function initAutoFill(form) {
     const slug  = toSlug(nameInput.value);
     const dbId  = toDbIdentifier(slug);
     const port  = nextAvailablePort();
+    const runtime = form.elements.runtime?.value || 'static-site';
+    const needsPort = Boolean(projectRuntimeMap[runtime]?.needsPort);
 
     setAutoField(getField(form, 'slug'),                 slug);
     setAutoField(getField(form, 'path'),                 slug ? `/srv/${slug}` : '');
-    setAutoField(getField(form, 'port'),                 slug ? port : '');
+    setAutoField(getField(form, 'port'),                 slug && needsPort ? port : '');
     setAutoField(getField(form, 'database.databaseName'), dbId ? dbId.slice(0, 63) : '');
     setAutoField(getField(form, 'database.username'),     dbId ? dbId.slice(0, 16) : '');
   });
@@ -133,16 +141,32 @@ function syncProjectWizardVisibility() {
   const form = getProjectForm();
   if (!form) return;
 
-  const kind = form.elements.kind?.value || 'static';
+  const runtime = form.elements.runtime?.value || 'static-site';
+  const option = projectRuntimeMap[runtime] || projectRuntimeMap['static-site'];
+  const kind = runtimeToKind(runtime);
   const databaseWizard = form.querySelector('.database-wizard');
   const apiWizard = form.querySelector('.api-wizard');
+  const phpWizard = form.querySelector('.php-wizard');
+  const portInput = form.elements.port;
 
   if (databaseWizard) {
-    databaseWizard.hidden = !(kind === 'database' || kind === 'full');
+    databaseWizard.hidden = !(option.hasDatabase || kind === 'database' || kind === 'full');
   }
 
   if (apiWizard) {
-    apiWizard.hidden = !(kind === 'api' || kind === 'full');
+    apiWizard.hidden = !option.hasApi;
+  }
+
+  if (phpWizard) {
+    phpWizard.hidden = !option.needsPhp;
+  }
+
+  if (portInput) {
+    portInput.disabled = !option.needsPort;
+    if (!option.needsPort) portInput.value = '';
+    if (option.needsPort && !portInput.value) {
+      setAutoField(portInput, nextAvailablePort());
+    }
   }
 }
 
@@ -178,9 +202,11 @@ export function readProjectWizardConfig() {
   const form = getProjectForm();
   if (!form) return null;
 
-  const kind = form.elements.kind.value;
+  const runtime = form.elements.runtime.value;
+  const option = projectRuntimeMap[runtime] || projectRuntimeMap['static-site'];
+  const kind = runtimeToKind(runtime);
   const database = {
-    enabled: kind === 'database' || kind === 'full',
+    enabled: option.hasDatabase || kind === 'database' || kind === 'full',
     provider: form.elements['database.provider'].value,
     host: form.elements['database.host'].value.trim(),
     port: Number(form.elements['database.port'].value || 3306),
@@ -190,13 +216,17 @@ export function readProjectWizardConfig() {
   };
 
   const api = {
-    enabled: kind === 'api' || kind === 'full',
+    enabled: option.hasApi,
     baseUrl: form.elements['api.baseUrl'].value.trim(),
     endpoints: readEndpointRows()
   };
 
   return {
     kind,
+    runtime,
+    php: {
+      fpmSocket: form.elements['php.fpmSocket']?.value.trim() || '/run/php/php8.1-fpm.sock'
+    },
     database,
     api,
     queryPresets: readSelectedQueryPresets(),
@@ -302,7 +332,7 @@ export function setupProjectWizard() {
   resetEndpointRowCount(endpointList ? endpointList.children.length : 0);
   form.dataset.ready = 'true';
 
-  form.elements.kind.addEventListener('change', syncProjectWizardVisibility);
+  form.elements.runtime.addEventListener('change', syncProjectWizardVisibility);
 
   if (addEndpointButton && endpointList) {
     addEndpointButton.addEventListener('click', () => {
