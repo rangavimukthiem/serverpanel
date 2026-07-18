@@ -826,6 +826,307 @@ label {
   white-space: nowrap;
 }
 
+/* ─── Service wizard ────────────────────────────────────────────────────────── */
+
+.service-wizard {
+  background: var(--panel);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 32px rgba(0,0,0,0.22);
+  margin-bottom: 20px;
+  padding: 20px 22px 18px;
+}
+
+.wizard-header {
+  margin-bottom: 14px;
+}
+
+.wizard-header h5 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 2px 0 0;
+}
+
+/* Mode selector */
+.wizard-mode-selector {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 18px;
+}
+
+.mode-option {
+  cursor: pointer;
+  display: block;
+  margin: 0;
+}
+
+.mode-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mode-card {
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  transition: border-color 160ms, background 160ms;
+}
+
+.mode-card strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mode-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.mode-option input[type="radio"]:checked + .mode-card {
+  background: rgba(45, 212, 191, 0.07);
+  border-color: rgba(45, 212, 191, 0.55);
+}
+
+.mode-option:hover .mode-card {
+  border-color: rgba(45, 212, 191, 0.3);
+}
+
+/* Form field groups */
+.service-wizard-form {
+  display: grid;
+  gap: 16px;
+}
+
+.wizard-field-group {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.wizard-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.wizard-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.wizard-field > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wizard-field > span em {
+  font-style: normal;
+  font-weight: 400;
+  opacity: 0.7;
+  text-transform: none;
+}
+
+.wizard-field input {
+  width: 100%;
+}
+
+.input-with-hint {
+  display: grid;
+  gap: 4px;
+}
+
+.input-hint {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  min-height: 14px;
+}
+
+/* Preset chips */
+.exec-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.preset-chip {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  min-height: unset;
+  padding: 4px 10px;
+  transition: background 140ms, border-color 140ms;
+}
+
+.preset-chip:hover {
+  background: rgba(45, 212, 191, 0.1);
+  border-color: rgba(45, 212, 191, 0.4);
+  color: var(--accent);
+}
+
+/* Toggle pill */
+.wizard-toggle-row {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-option {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  font-size: 13px;
+  margin: 0;
+  user-select: none;
+}
+
+.toggle-option input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-pill {
+  background: var(--line);
+  border-radius: 999px;
+  display: inline-block;
+  flex-shrink: 0;
+  height: 20px;
+  position: relative;
+  transition: background 180ms;
+  width: 36px;
+}
+
+.toggle-pill::after {
+  background: #fff;
+  border-radius: 50%;
+  content: '';
+  height: 14px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: transform 180ms;
+  width: 14px;
+}
+
+.toggle-option input[type="checkbox"]:checked + .toggle-pill {
+  background: var(--accent);
+}
+
+.toggle-option input[type="checkbox"]:checked + .toggle-pill::after {
+  transform: translateX(16px);
+}
+
+/* Wizard footer */
+.wizard-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.wizard-submit {
+  min-width: 140px;
+}
+
+.wizard-feedback {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 0;
+  min-height: 16px;
+}
+
+/* Improved project service card */
+.service-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.service-unit-name {
+  color: var(--muted);
+  font-size: 11px;
+  display: block;
+  margin-top: 2px;
+}
+
+.service-card-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.service-control-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.svc-btn {
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.svc-btn.restart {
+  background: var(--warning);
+  color: #2d2100;
+}
+
+.svc-btn.stop {
+  background: var(--danger);
+  color: #30030a;
+}
+
+.service-mgmt-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.svc-btn-edit,
+.svc-btn-danger {
+  font-size: 11px;
+  min-height: 26px;
+  padding: 0 8px;
+}
+
+.svc-btn-danger {
+  color: var(--danger);
+}
+
+.empty-services-notice {
+  background: var(--panel-soft);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  text-align: center;
+}
+
+.empty-services-notice p {
+  margin: 0 0 4px;
+}
+
+.empty-services-notice .muted-text {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* ─── Projects split layout ────────────────────────────────────────────────── */
 #projects.panel-section {
   padding: 0;
