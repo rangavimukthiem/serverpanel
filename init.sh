@@ -51,6 +51,7 @@ Options:
   --no-admin                  Skip first admin user creation
   --admin-username USER       First admin username. Default: admin
   --disable-service-control   Keep systemctl controls disabled in .env
+  --service-name NAME         Override the systemd service name (default: ekafy)
   -h, --help                  Show this help
 
 Examples:
@@ -125,7 +126,10 @@ while [[ $# -gt 0 ]]; do
       ENABLE_SERVICE_CONTROL="false"
       shift
       ;;
-    -h|--help)
+    --service-name)
+      SERVICE_NAME="${2:-}"
+      shift 2
+      ;;    -h|--help)
       usage
       exit 0
       ;;
