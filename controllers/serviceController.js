@@ -42,6 +42,7 @@ const GLOBAL_SERVICE_MAP = Object.freeze({
 });
 
 const ALLOWED_ACTIONS = new Set(['start', 'stop', 'restart']);
+const ALLOWED_GLOBAL_ACTIONS = new Set(['start', 'stop', 'restart', 'reload']);
 const SERVICE_NAME_PATTERN = /^[a-zA-Z0-9_.@-]{1,128}(?:\.service)?$/;
 const SYSTEMD_DETAIL_PROPERTIES = [
   'Id',
@@ -183,6 +184,16 @@ async function getServiceActiveStatus(serviceName) {
 
 async function runServiceCommand(serviceName, action) {
   await runSystemctl([action, serviceName], { timeout: 10000 });
+}
+
+function normalizeGlobalServiceAction(serviceName, action) {
+  if (!ALLOWED_GLOBAL_ACTIONS.has(action)) return null;
+  if (action === 'reload' && serviceName !== 'nginx') return null;
+
+  // Restarting Nginx from a request proxied by Nginx can drop the response.
+  // Reload applies config changes without interrupting the control panel.
+  if (serviceName === 'nginx' && action === 'restart') return 'reload';
+  return action;
 }
 
 function normalizeUnlimited(value) {
@@ -343,16 +354,17 @@ async function controlService(req, res, next) {
   try {
     const { name, action } = req.params;
     const service = GLOBAL_SERVICE_MAP[name];
+    const commandAction = service ? normalizeGlobalServiceAction(service.name, action) : null;
 
     if (!service)                return res.status(400).json({ message: 'Service is not allowed' });
-    if (!ALLOWED_ACTIONS.has(action)) return res.status(400).json({ message: 'Action is not allowed' });
+    if (!commandAction) return res.status(400).json({ message: 'Action is not allowed' });
     if (!isServiceControlEnabled())   return res.status(503).json({ message: 'Service control is disabled. Set ENABLE_SERVICE_CONTROL=true on the Linux VPS.' });
     if (process.platform === 'win32') return res.status(503).json({ message: 'systemctl is available only on Linux hosts' });
 
-    await runServiceCommand(service.name, action);
-    await createLog({ userId: req.user.id, action: `${action} global service ${service.name}` });
+    await runServiceCommand(service.name, commandAction);
+    await createLog({ userId: req.user.id, action: `${commandAction} global service ${service.name}` });
 
-    return res.json({ message: `${service.name} ${action} command completed` });
+    return res.json({ message: `${service.name} ${commandAction} command completed` });
   } catch (error) {
     return next(new AppError('Service command failed', 503, 'SERVICE_COMMAND_FAILED', {
       service: req.params.name,

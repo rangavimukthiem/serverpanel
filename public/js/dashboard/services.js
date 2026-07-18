@@ -14,6 +14,12 @@ const SERVICE_ACTIONS = [
   { action: 'stop', label: 'Stop', className: 'stop' }
 ];
 
+const NGINX_SERVICE_ACTIONS = [
+  { action: 'start', label: 'Start', className: '' },
+  { action: 'reload', label: 'Reload', className: 'restart' },
+  { action: 'stop', label: 'Stop', className: 'stop' }
+];
+
 function activeStatusBadge(active) {
   if (active === null) return '<span class="service-status unknown">Unavailable</span>';
   return active
@@ -131,10 +137,11 @@ function renderServiceActions(svc, scope) {
   const admin = isAdmin(dashboardState.user);
   const disabled = admin ? '' : 'disabled';
   const projectId = svc.project?.id ? `data-project-id="${escapeHtml(svc.project.id)}"` : '';
+  const actions = scope === 'global' && svc.name === 'nginx' ? NGINX_SERVICE_ACTIONS : SERVICE_ACTIONS;
 
   return `
     <div class="service-actions">
-      ${SERVICE_ACTIONS.map((item) => `
+      ${actions.map((item) => `
         <button
           type="button"
           data-service="${escapeHtml(svc.name)}"
