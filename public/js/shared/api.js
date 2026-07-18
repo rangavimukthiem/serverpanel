@@ -6,11 +6,21 @@ export async function api(path, options = {}) {
     ...(options.headers || {})
   };
 
-  const response = await fetch(path, {
-    ...options,
-    headers,
-    credentials: 'include'
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers,
+      credentials: 'include'
+    });
+  } catch (error) {
+    throw new ApiError(
+      'Cannot reach server',
+      0,
+      'NETWORK_ERROR',
+      error?.message || null
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
 

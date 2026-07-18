@@ -878,6 +878,21 @@ label {
 }
 
 /* ─── Setup steps ──────────────────────────────────────────────────────────── */
+.project-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.users-table-heading {
+  margin-top: 18px;
+}
+
+.table-search-input {
+  max-width: 280px;
+  min-width: 220px;
+}
+
 .setup-steps {
   display: grid;
   gap: 12px;

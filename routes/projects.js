@@ -13,6 +13,7 @@ const {
   listProjects,
   createManagedProject,
   updateProjectWizardConfig,
+  updateProjectStatus,
   getProjectWizard,
   setProjectMember,
   deleteProjectMember,
@@ -40,6 +41,7 @@ const router = express.Router();
 router.get('/',    listProjects);
 router.post('/',   requireAdmin, createManagedProject);
 router.delete('/:id', requireAdmin, deleteProject);
+router.patch('/:id/status', requireAdmin, updateProjectStatus);
 
 // ── Wizard config ────────────────────────────────────────────────────────────
 router.get('/:id/wizard',  getProjectWizard);

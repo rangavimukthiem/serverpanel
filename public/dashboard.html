@@ -146,6 +146,19 @@
                   <h4>Members</h4>
                   <div id="ovMembers"></div>
                 </div>
+                <div class="wizard-card admin-only" id="projectManagementSection">
+                  <div class="section-heading">
+                    <div>
+                      <h4>Project Management</h4>
+                      <p class="eyebrow" id="projectManagementStatus">Current status</p>
+                    </div>
+                  </div>
+                  <div class="project-management-actions">
+                    <button id="toggleProjectStatus" class="warn-button" type="button">Disable Project</button>
+                    <button id="deleteProject" class="danger-button" type="button">Remove Project</button>
+                  </div>
+                  <p id="projectManagementMessage" class="message" role="status"></p>
+                </div>
                 <div class="wizard-card admin-only" id="envSection">
                   <div class="section-heading">
                     <h4>Environment Variables</h4>
@@ -228,7 +241,6 @@
                     <input id="dbUser"     type="text" placeholder="DB username (e.g. myapp_user)">
                     <select id="dbProvider">
                       <option value="mariadb">MariaDB</option>
-                      <option value="mysql">MySQL</option>
                     </select>
                   </div>
                   <button id="provisionDb" type="button">Provision Database</button>
@@ -364,6 +376,13 @@
             </div>
           </div>
 
+          <div class="section-heading users-table-heading">
+            <div>
+              <p class="eyebrow">Accounts</p>
+              <h4>Users</h4>
+            </div>
+            <input id="userSearch" class="table-search-input" type="search" placeholder="Search users">
+          </div>
           <div id="usersTable" class="table-panel"></div>
           <p id="accessMessage" class="message" role="status"></p>
         </section>
@@ -433,7 +452,6 @@
               <div class="wizard-form-grid">
                 <select name="database.provider">
                   <option value="mariadb">MariaDB</option>
-                  <option value="mysql">MySQL</option>
                 </select>
                 <input name="database.host"         type="text"   placeholder="DB host" value="127.0.0.1">
                 <input name="database.port"         type="number" placeholder="DB port" value="3306">

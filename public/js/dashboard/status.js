@@ -22,9 +22,12 @@ export async function loadStatus() {
   setMeter('cpuMeter', cpu);
   setMeter('ramMeter', ram);
   setMeter('diskMeter', disk || 0);
+
+  const refreshPill = document.getElementById('refreshPill');
+  if (refreshPill) refreshPill.textContent = 'Auto-refresh 5s';
 }
 
-export function handleStatusError(error, context) {
+export function handleStatusError(error, context, options = {}) {
   if (redirectOnAuthError(error)) {
     return true;
   }
@@ -36,6 +39,14 @@ export function handleStatusError(error, context) {
   setMeter('cpuMeter', 0);
   setMeter('ramMeter', 0);
   setMeter('diskMeter', 0);
+
+  const refreshPill = document.getElementById('refreshPill');
+  if (refreshPill) refreshPill.textContent = 'Status unavailable';
+
+  if (options.silent) {
+    console.warn(context, error);
+    return false;
+  }
 
   reportGlobalError(error, context);
   return false;

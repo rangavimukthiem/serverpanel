@@ -3,6 +3,7 @@ const {
   findProjectById,
   createProject,
   updateProjectConfig,
+  updateProjectFields,
   deleteProjectById,
   getProjectMembership,
   upsertProjectMember,
@@ -22,6 +23,7 @@ const execFileAsync = promisify(execFile);
 
 const PROJECT_ROLE_SET = new Set(['manager', 'user']);
 const PROJECT_KIND_SET = new Set(['static', 'database', 'api', 'full']);
+const PROJECT_STATUS_SET = new Set(['active', 'inactive']);
 const PROJECT_RUNTIME_SET = new Set(['static-site', 'node-app', 'python-api', 'php-site', 'wordpress-site', 'static-api']);
 const DATABASE_RUNTIME_SET = new Set(['wordpress-site']);
 const API_RUNTIME_SET = new Set(['node-app', 'python-api', 'static-api']);
@@ -34,6 +36,7 @@ const PHP_FPM_SOCKET_PATTERN = /^\/run\/php\/php\d+\.\d+-fpm\.sock$/;
 const PROJECTS_ROOT = process.env.PROJECTS_ROOT || '/srv';
 const NGINX_SITES_AVAILABLE = '/etc/nginx/sites-available';
 const NGINX_SITES_ENABLED = '/etc/nginx/sites-enabled';
+const SYSTEMD_SYSTEM_DIR = '/etc/systemd/system';
 
 function trimText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -362,6 +365,39 @@ async function updateProjectWizardConfig(req, res, next) {
   }
 }
 
+async function updateProjectStatus(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required to change project status' });
+    }
+
+    const status = trimText(req.body.status).toLowerCase();
+    if (!PROJECT_STATUS_SET.has(status)) {
+      return res.status(400).json({ message: 'Project status must be active or inactive' });
+    }
+
+    const project = await findProjectById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const updatedProject = await updateProjectFields(projectId, { status });
+    await createLog({
+      userId: req.user.id,
+      action: `set project ${project.name} status to ${status}`
+    });
+
+    return res.json({ project: updatedProject });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function getProjectWizard(req, res, next) {
   try {
     const projectId = Number(req.params.id);
@@ -489,24 +525,78 @@ async function runSystemctl(args, timeout = 10000) {
   await execFileAsync(command.file, command.args, { timeout });
 }
 
+function normalizeInsideRoot(targetPath, rootPath) {
+  const value = trimText(targetPath);
+  if (!value || !value.startsWith('/')) return null;
+
+  const normalized = path.posix.normalize(value);
+  const root = path.posix.normalize(rootPath);
+
+  if (normalized === root || !normalized.startsWith(`${root}/`)) return null;
+  return normalized;
+}
+
+function isSafeSqlIdentifier(value) {
+  return /^[A-Za-z0-9_]{1,64}$/.test(trimText(value));
+}
+
+function isSafeSqlAccountHost(value) {
+  return /^[A-Za-z0-9_.:%-]{1,253}$/.test(trimText(value));
+}
+
+function isSafeSystemdServiceName(value) {
+  return /^[A-Za-z0-9_.@-]{1,128}(?:\.service)?$/.test(trimText(value));
+}
+
+function serviceUnitFilePath(serviceName) {
+  const value = trimText(serviceName);
+  if (!isSafeSystemdServiceName(value)) return null;
+
+  const unitName = value.endsWith('.service') ? value : `${value}.service`;
+  return path.posix.join(SYSTEMD_SYSTEM_DIR, unitName);
+}
+
 async function removePathIfExists(targetPath) {
   await fs.rm(targetPath, { recursive: true, force: true });
 }
 
-async function cleanupProjectDatabase(envs) {
-  const databaseName = envs.DB_NAME;
-  const databaseUser = envs.DB_USER;
-  const databaseHost = envs.DB_HOST || '127.0.0.1';
+async function removeFileIfExists(filePath, warningLabel, warnings) {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      warnings.push(`${warningLabel}: ${error.message}`);
+    }
+  }
+}
+
+async function cleanupProjectDatabase(project, envs) {
+  const databaseConfig = project.config?.database || {};
+  const databaseName = trimText(envs.DB_NAME || databaseConfig.databaseName);
+  const databaseUser = trimText(envs.DB_USER || databaseConfig.username);
+  const databaseHost = trimText(envs.DB_HOST || databaseConfig.host || '127.0.0.1');
 
   if (!databaseName && !databaseUser) {
     return null;
   }
 
   if (databaseName) {
+    if (!isSafeSqlIdentifier(databaseName)) {
+      throw new Error(`Unsafe database name "${databaseName}"`);
+    }
+
     await adminQuery(`DROP DATABASE IF EXISTS \`${databaseName}\``);
   }
 
   if (databaseUser) {
+    if (!isSafeSqlIdentifier(databaseUser)) {
+      throw new Error(`Unsafe database user "${databaseUser}"`);
+    }
+
+    if (!isSafeSqlAccountHost(databaseHost)) {
+      throw new Error(`Unsafe database host "${databaseHost}"`);
+    }
+
     const accountHosts = new Set([databaseHost]);
     if (databaseHost === 'localhost' || databaseHost === '127.0.0.1') {
       accountHosts.add('localhost');
@@ -523,24 +613,19 @@ async function cleanupProjectDatabase(envs) {
 }
 
 async function cleanupProjectNginx(project, warnings) {
-  const configPath = project.nginx_config_path || path.join(NGINX_SITES_AVAILABLE, project.slug);
-  const enabledPath = path.join(NGINX_SITES_ENABLED, project.slug);
+  const configPath =
+    normalizeInsideRoot(project.nginx_config_path, NGINX_SITES_AVAILABLE) ||
+    path.posix.join(NGINX_SITES_AVAILABLE, project.slug);
+  const enabledPaths = new Set([
+    path.posix.join(NGINX_SITES_ENABLED, project.slug),
+    path.posix.join(NGINX_SITES_ENABLED, path.posix.basename(configPath))
+  ]);
 
-  try {
-    await fs.unlink(enabledPath);
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      warnings.push(`Nginx enabled link: ${error.message}`);
-    }
+  for (const enabledPath of enabledPaths) {
+    await removeFileIfExists(enabledPath, 'Nginx enabled link', warnings);
   }
 
-  try {
-    await fs.unlink(configPath);
-  } catch (error) {
-    if (error.code !== 'ENOENT') {
-      warnings.push(`Nginx config: ${error.message}`);
-    }
-  }
+  await removeFileIfExists(configPath, 'Nginx config', warnings);
 
   if (canUseShellCleanup()) {
     try {
@@ -582,23 +667,56 @@ async function cleanupProjectServices(projectId, warnings) {
 
   const services = await listProjectServices(projectId);
   for (const service of services) {
+    const serviceName = trimText(service.service_name);
     try {
-      await runSystemctl(['stop', service.service_name]);
+      await runSystemctl(['stop', serviceName]);
     } catch (error) {
-      warnings.push(`Project service stop (${service.service_name}): ${error.message}`);
+      warnings.push(`Project service stop (${serviceName}): ${error.message}`);
     }
 
     try {
-      await runSystemctl(['disable', service.service_name]);
+      await runSystemctl(['disable', serviceName]);
     } catch (error) {
-      warnings.push(`Project service disable (${service.service_name}): ${error.message}`);
+      warnings.push(`Project service disable (${serviceName}): ${error.message}`);
     }
+
+    try {
+      await runSystemctl(['reset-failed', serviceName]);
+    } catch (error) {
+      warnings.push(`Project service reset (${serviceName}): ${error.message}`);
+    }
+
+    const unitPath = serviceUnitFilePath(serviceName);
+    if (!unitPath) {
+      warnings.push(`Project service unit skipped (${serviceName}): unsafe service name`);
+      continue;
+    }
+
+    await removeFileIfExists(unitPath, `Project service unit (${serviceName})`, warnings);
+
+    try {
+      await fs.rm(`${unitPath}.d`, { recursive: true, force: true });
+    } catch (error) {
+      warnings.push(`Project service drop-ins (${serviceName}): ${error.message}`);
+    }
+  }
+
+  try {
+    await runSystemctl(['daemon-reload']);
+  } catch (error) {
+    warnings.push(`Systemd daemon reload: ${error.message}`);
   }
 }
 
 async function cleanupProjectFilesystem(project, warnings) {
+  const projectPath = normalizeProjectPath(project.path);
+  if (!projectPath) {
+    warnings.push(`Project files skipped: path is outside ${PROJECTS_ROOT}`);
+    return;
+  }
+
   try {
-    await removePathIfExists(project.path);
+    await removePathIfExists(projectPath);
   } catch (error) {
     warnings.push(`Project files: ${error.message}`);
   }
@@ -624,7 +742,7 @@ async function deleteProject(req, res, next) {
 
     const envs = await getAllProjectEnvsAsObject(projectId);
 
-    await cleanupProjectDatabase(envs).catch((error) => {
+    await cleanupProjectDatabase(project, envs).catch((error) => {
       warnings.push(`Database cleanup: ${error.message}`);
     });
 
@@ -689,6 +807,7 @@ module.exports = {
   listProjects,
   createManagedProject,
   updateProjectWizardConfig,
+  updateProjectStatus,
   getProjectWizard,
   setProjectMember,
   deleteProjectMember,

@@ -84,7 +84,7 @@ function initDashboardModule(label, initFn) {
 function startSystemStatusLoop() {
   loadStatus().catch((e) => handleStatusError(e, 'Loading system status'));
   setInterval(() => {
-    loadStatus().catch((e) => handleStatusError(e, 'Refreshing system status'));
+    loadStatus().catch((e) => handleStatusError(e, 'Refreshing system status', { silent: true }));
   }, 5000);
 }
 

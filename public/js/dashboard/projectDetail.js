@@ -8,9 +8,9 @@
 import { api } from '../shared/api.js';
 import { escapeHtml } from '../shared/dom.js';
 import { isAdmin } from '../shared/auth.js';
-import { reportGlobalError } from '../shared/errors.js';
+import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
 import { dashboardState } from './state.js';
-import { renderMemberPills } from './projects.js';
+import { loadProjects, renderMemberPills } from './projects.js';
 import { loadSetupTab } from './projectSetup.js';
 import { loadDatabaseTab } from './projectDatabase.js';
 import { loadGitTab } from './projectGit.js';
@@ -79,6 +79,8 @@ function renderOverview(project) {
   const ovMembers = document.getElementById('ovMembers');
   if (ovMembers) ovMembers.innerHTML = renderMemberPills(project.members);
 
+  bindProjectManagement(project);
+
   // Show/hide env section based on admin
   const envSection = document.getElementById('envSection');
   if (envSection) envSection.hidden = !isAdmin(dashboardState.user);
@@ -86,6 +88,85 @@ function renderOverview(project) {
   if (isAdmin(dashboardState.user)) {
     loadEnvKeys(project);
     bindEnvForm(project);
+  }
+}
+
+function bindProjectManagement(project) {
+  const section = document.getElementById('projectManagementSection');
+  if (section) section.hidden = !isAdmin(dashboardState.user);
+  if (!section || !isAdmin(dashboardState.user)) return;
+
+  const statusMeta = document.getElementById('projectManagementStatus');
+  const message = document.getElementById('projectManagementMessage');
+  const toggleBtn = document.getElementById('toggleProjectStatus');
+  const deleteBtn = document.getElementById('deleteProject');
+  const isInactive = project.status === 'inactive';
+
+  if (statusMeta) statusMeta.textContent = `Current status: ${project.status}`;
+  if (message) message.textContent = '';
+
+  if (toggleBtn) {
+    const fresh = toggleBtn.cloneNode(true);
+    toggleBtn.replaceWith(fresh);
+    fresh.textContent = isInactive ? 'Enable Project' : 'Disable Project';
+    fresh.className = isInactive ? '' : 'warn-button';
+
+    fresh.addEventListener('click', async () => {
+      const nextStatus = isInactive ? 'active' : 'inactive';
+      const progressText = nextStatus === 'inactive' ? 'Disabling project...' : 'Enabling project...';
+
+      if (nextStatus === 'inactive' && !window.confirm(`Disable project "${project.name}"?`)) return;
+
+      fresh.disabled = true;
+      if (message) message.textContent = progressText;
+
+      try {
+        const data = await api(`/api/projects/${project.id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: nextStatus })
+        });
+
+        dashboardState.selectedProject = data.project;
+        await loadProjects();
+        renderOverview(data.project);
+        showGlobalMessage(`Project "${data.project.name}" ${nextStatus === 'inactive' ? 'disabled' : 'enabled'}.`, 'success');
+      } catch (error) {
+        if (message) message.textContent = error.message;
+        reportGlobalError(error, 'Changing project status');
+      } finally {
+        fresh.disabled = false;
+      }
+    });
+  }
+
+  if (deleteBtn) {
+    const fresh = deleteBtn.cloneNode(true);
+    deleteBtn.replaceWith(fresh);
+    fresh.addEventListener('click', async () => {
+      const confirmed = window.confirm(
+        `Remove project "${project.name}"? This wipes the project record, nginx config, linked systemd services, database/user, API endpoint registry, Git repo, and project files.`
+      );
+      if (!confirmed) return;
+
+      fresh.disabled = true;
+      if (message) message.textContent = 'Removing project...';
+
+      try {
+        const data = await api(`/api/projects/${project.id}`, { method: 'DELETE' });
+        closeDrawer();
+        await loadProjects();
+
+        const warnings = Array.isArray(data.warnings) && data.warnings.length
+          ? `Warnings: ${data.warnings.join(' | ')}`
+          : null;
+        showGlobalMessage(`Project "${project.name}" removed.`, 'success', warnings);
+      } catch (error) {
+        if (message) message.textContent = error.message;
+        reportGlobalError(error, 'Removing project');
+      } finally {
+        fresh.disabled = false;
+      }
+    });
   }
 }
 

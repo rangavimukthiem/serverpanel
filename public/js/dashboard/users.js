@@ -25,6 +25,57 @@ export function renderUserRow(user) {
   `;
 }
 
+function getUserSearchTerm() {
+  return document.getElementById('userSearch')?.value.trim().toLowerCase() || '';
+}
+
+function userMatchesSearch(user, term) {
+  if (!term) return true;
+
+  const projectText = (user.projects || [])
+    .map((project) => `${project.name} ${project.role}`)
+    .join(' ');
+  const haystack = `${user.username} ${user.role} ${projectText}`.toLowerCase();
+
+  return haystack.includes(term);
+}
+
+function renderUsersTable() {
+  const table = document.getElementById('usersTable');
+  if (!table) return;
+
+  const term = getUserSearchTerm();
+  const filteredUsers = dashboardState.users.filter((user) => userMatchesSearch(user, term));
+  const emptyText = term ? 'No users match your search.' : 'No users yet.';
+
+  table.innerHTML = `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Global Role</th>
+          <th>Project Access</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filteredUsers.length
+          ? filteredUsers.map(renderUserRow).join('')
+          : `<tr><td colspan="5">${escapeHtml(emptyText)}</td></tr>`}
+      </tbody>
+    </table>
+  `;
+}
+
+function bindUserSearch() {
+  const input = document.getElementById('userSearch');
+  if (!input || input.dataset.bound === 'true') return;
+
+  input.dataset.bound = 'true';
+  input.addEventListener('input', renderUsersTable);
+}
+
 export function syncUserOptions() {
   const select = document.querySelector('#memberForm select[name="userId"]');
   if (!select) return;
@@ -41,22 +92,8 @@ export async function loadUsers() {
   try {
     const data = await api('/api/users');
     dashboardState.users = data.users;
-    table.innerHTML = `
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Global Role</th>
-            <th>Project Access</th>
-            <th>Created</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.users.map(renderUserRow).join('')}
-        </tbody>
-      </table>
-    `;
+    bindUserSearch();
+    renderUsersTable();
     syncUserOptions();
   } catch (error) {
     if (redirectOnAuthError(error)) {
