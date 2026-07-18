@@ -9,6 +9,7 @@ import { api } from '../shared/api.js';
 import { escapeHtml } from '../shared/dom.js';
 import { isAdmin } from '../shared/auth.js';
 import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
+import { confirmDialog } from '../shared/dialog.js';
 import { dashboardState } from './state.js';
 import { loadProjects, renderMemberPills } from './projects.js';
 import { loadSetupTab } from './projectSetup.js';
@@ -115,7 +116,16 @@ function bindProjectManagement(project) {
       const nextStatus = isInactive ? 'active' : 'inactive';
       const progressText = nextStatus === 'inactive' ? 'Disabling project...' : 'Enabling project...';
 
-      if (nextStatus === 'inactive' && !window.confirm(`Disable project "${project.name}"?`)) return;
+      if (nextStatus === 'inactive') {
+        const confirmed = await confirmDialog({
+          eyebrow: 'Project management',
+          title: 'Disable project?',
+          message: `Disable project "${project.name}"? The project will remain on disk, but it will be marked inactive in EKAFY.`,
+          confirmLabel: 'Disable Project',
+          variant: 'warning'
+        });
+        if (!confirmed) return;
+      }
 
       fresh.disabled = true;
       if (message) message.textContent = progressText;
@@ -143,9 +153,13 @@ function bindProjectManagement(project) {
     const fresh = deleteBtn.cloneNode(true);
     deleteBtn.replaceWith(fresh);
     fresh.addEventListener('click', async () => {
-      const confirmed = window.confirm(
-        `Remove project "${project.name}"? This wipes the project record, nginx config, linked systemd services, database/user, API endpoint registry, Git repo, and project files.`
-      );
+      const confirmed = await confirmDialog({
+        eyebrow: 'Destructive action',
+        title: 'Remove project?',
+        message: `Remove project "${project.name}"? This wipes the project record, nginx config, linked systemd services, database/user, API endpoint registry, Git repo, and project files.`,
+        confirmLabel: 'Remove Project',
+        variant: 'danger'
+      });
       if (!confirmed) return;
 
       fresh.disabled = true;
@@ -193,7 +207,14 @@ async function loadEnvKeys(project) {
       const btn = e.target.closest('[data-delete-env]');
       if (!btn) return;
       const key = btn.dataset.deleteEnv;
-      if (!window.confirm(`Remove env variable "${key}"?`)) return;
+      const confirmed = await confirmDialog({
+        eyebrow: 'Environment variable',
+        title: 'Remove variable?',
+        message: `Remove env variable "${key}"?`,
+        confirmLabel: 'Remove',
+        variant: 'danger'
+      });
+      if (!confirmed) return;
       try {
         await api(`/api/projects/${project.id}/env/${encodeURIComponent(key)}`, { method: 'DELETE' });
         await loadEnvKeys(project);

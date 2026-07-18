@@ -8,6 +8,7 @@ import { api } from '../shared/api.js';
 import { escapeHtml } from '../shared/dom.js';
 import { reportGlobalError } from '../shared/errors.js';
 import { isAdmin } from '../shared/auth.js';
+import { confirmDialog } from '../shared/dialog.js';
 import { dashboardState } from './state.js';
 
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
@@ -143,7 +144,14 @@ function bindEndpointTableEvents(project, endpoints, canManage) {
     const deleteBtn = e.target.closest('[data-delete-ep]');
     if (deleteBtn) {
       const idx = Number(deleteBtn.dataset.deleteEp);
-      if (!window.confirm(`Remove endpoint "${endpoints[idx]?.name}"?`)) return;
+      const confirmed = await confirmDialog({
+        eyebrow: 'API endpoint',
+        title: 'Remove endpoint?',
+        message: `Remove endpoint "${endpoints[idx]?.name}"?`,
+        confirmLabel: 'Remove',
+        variant: 'danger'
+      });
+      if (!confirmed) return;
       try {
         await api(`/api/projects/${project.id}/endpoints/${idx}`, { method: 'DELETE' });
         await refreshEndpoints(project, canManage);

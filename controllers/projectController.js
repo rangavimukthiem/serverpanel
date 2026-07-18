@@ -666,6 +666,10 @@ async function cleanupProjectServices(projectId, warnings) {
   }
 
   const services = await listProjectServices(projectId);
+  if (!services.length) {
+    return;
+  }
+
   for (const service of services) {
     const serviceName = trimText(service.service_name);
     try {

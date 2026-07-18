@@ -533,10 +533,33 @@ label {
 }
 
 /* ─── Service cards ────────────────────────────────────────────────────────── */
+.services-stack,
+.services-section {
+  display: grid;
+  gap: 18px;
+}
+
+.services-stack {
+  gap: 26px;
+}
+
+.section-heading.compact {
+  margin: 0;
+}
+
+.section-heading.compact h4 {
+  font-size: 16px;
+  margin: 0;
+}
+
 .service-grid {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.service-grid-wide {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
 }
 
 .service-card {
@@ -546,12 +569,17 @@ label {
   box-shadow: var(--shadow-sm);
   display: grid;
   gap: 14px;
+  min-width: 0;
   padding: 16px;
   transition: border-color 180ms;
 }
 
 .service-card:hover {
   border-color: rgba(45, 212, 191, 0.25);
+}
+
+.service-card.is-ekafy {
+  border-color: rgba(45, 212, 191, 0.18);
 }
 
 .service-card header {
@@ -561,10 +589,36 @@ label {
   justify-content: space-between;
 }
 
+.service-title-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .service-card h4 {
   font-size: 15px;
   font-weight: 700;
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.service-unit,
+.service-project {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.service-unit {
+  font-family: var(--font-mono);
+}
+
+.service-project span {
+  color: var(--text);
+  font-family: var(--font-mono);
+  margin-left: 6px;
 }
 
 .service-status {
@@ -589,6 +643,55 @@ label {
 .service-status.unknown {
   background: var(--panel-soft);
   color: var(--muted);
+}
+
+.service-detail-list {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+}
+
+.service-detail-row {
+  align-items: baseline;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 86px minmax(0, 1fr);
+  min-height: 18px;
+}
+
+.service-detail-row dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.service-detail-row dd {
+  color: var(--text);
+  font-size: 12px;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.service-detail-row.is-path dd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.service-detail-unavailable {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  padding: 12px;
 }
 
 .service-actions {
@@ -619,6 +722,40 @@ label {
 
 .service-actions .restart:hover {
   background: #f59e0b;
+}
+
+.service-limit-form {
+  align-items: end;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  padding-top: 12px;
+}
+
+.service-limit-form label {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  min-width: 0;
+}
+
+.service-limit-form span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.service-limit-form input {
+  min-width: 0;
+  width: 100%;
+}
+
+.service-limit-form button {
+  min-height: 40px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 /* ─── Projects split layout ────────────────────────────────────────────────── */
@@ -1294,6 +1431,67 @@ label {
   width: 100%;
 }
 
+.confirm-dialog-overlay {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 10000;
+}
+
+.confirm-dialog-overlay[hidden] {
+  display: none !important;
+}
+
+.confirm-dialog-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+  display: grid;
+  gap: 16px;
+  max-width: 520px;
+  padding: 20px;
+  width: min(100%, 520px);
+}
+
+.confirm-dialog-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.confirm-dialog-header h3 {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.confirm-dialog-close {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.confirm-dialog-message {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 /* Responsive 2-col grid inside the modal form */
 .wizard-form-grid {
   display: grid;
@@ -1524,6 +1722,24 @@ label {
 
   .metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .service-grid,
+  .service-grid-wide,
+  .service-limit-form {
+    grid-template-columns: 1fr;
+  }
+
+  .service-card header {
+    align-items: flex-start;
+  }
+
+  .service-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .service-detail-row dd {
+    text-align: left;
   }
 
   .inline-form,

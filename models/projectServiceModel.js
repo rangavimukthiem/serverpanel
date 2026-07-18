@@ -50,6 +50,39 @@ async function listProjectServices(projectId) {
 }
 
 /**
+ * List every project-linked service with its owning project.
+ * Used by the top-level Services page to show EKAFY-managed units separately.
+ */
+async function listAllProjectServices() {
+  return query(`
+    SELECT
+      ps.id, ps.project_id, ps.service_name, ps.label, ps.created_at,
+      p.name AS project_name, p.slug AS project_slug, p.status AS project_status
+    FROM project_services ps
+    INNER JOIN projects p ON p.id = ps.project_id
+    ORDER BY p.name ASC, ps.service_name ASC
+  `);
+}
+
+/**
+ * Find a project-linked service by its systemd unit name.
+ * @param {string} serviceName
+ */
+async function findProjectServiceByName(serviceName) {
+  const rows = await query(`
+    SELECT
+      ps.id, ps.project_id, ps.service_name, ps.label, ps.created_at,
+      p.name AS project_name, p.slug AS project_slug, p.status AS project_status
+    FROM project_services ps
+    INNER JOIN projects p ON p.id = ps.project_id
+    WHERE ps.service_name = ?
+    LIMIT 1
+  `, [serviceName]);
+
+  return rows[0] || null;
+}
+
+/**
  * Check whether a service name is linked to a specific project.
  * Used to validate service control requests.
  * @param {number} projectId
@@ -68,5 +101,7 @@ module.exports = {
   addProjectService,
   removeProjectService,
   listProjectServices,
+  listAllProjectServices,
+  findProjectServiceByName,
   isServiceLinkedToProject
 };

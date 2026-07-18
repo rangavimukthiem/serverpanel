@@ -19,7 +19,14 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const { findProjectById, getProjectMembership } = require('../models/projectModel');
-const { addProjectService, removeProjectService, listProjectServices, isServiceLinkedToProject } = require('../models/projectServiceModel');
+const {
+  addProjectService,
+  removeProjectService,
+  listProjectServices,
+  listAllProjectServices,
+  findProjectServiceByName,
+  isServiceLinkedToProject
+} = require('../models/projectServiceModel');
 const { createLog } = require('../models/logModel');
 const { AppError } = require('../errors/AppError');
 
@@ -35,6 +42,26 @@ const GLOBAL_SERVICE_MAP = Object.freeze({
 });
 
 const ALLOWED_ACTIONS = new Set(['start', 'stop', 'restart']);
+const SERVICE_NAME_PATTERN = /^[a-zA-Z0-9_.@-]{1,128}(?:\.service)?$/;
+const SYSTEMD_DETAIL_PROPERTIES = [
+  'Id',
+  'Description',
+  'LoadState',
+  'ActiveState',
+  'SubState',
+  'UnitFileState',
+  'FragmentPath',
+  'MainPID',
+  'ExecMainPID',
+  'ExecMainStatus',
+  'MemoryCurrent',
+  'MemoryMax',
+  'CPUUsageNSec',
+  'CPUQuotaPerSecUSec',
+  'TasksCurrent',
+  'TasksMax',
+  'NRestarts'
+];
 
 function isServiceControlEnabled() {
   return process.env.ENABLE_SERVICE_CONTROL === 'true';
@@ -50,12 +77,104 @@ function systemctlCommand(args) {
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
+function commandDetails(error) {
+  return {
+    stdout: (error?.stdout || '').trim(),
+    stderr: (error?.stderr || '').trim(),
+    message: error?.message || 'Command failed'
+  };
+}
+
+async function runSystemctl(args, options = {}) {
+  const cmd = systemctlCommand(args);
+  return execFileAsync(cmd.file, cmd.args, { timeout: 10000, ...options });
+}
+
+async function readSystemctl(args, options = {}) {
+  return execFileAsync('systemctl', args, { timeout: 3500, ...options });
+}
+
+function parseSystemctlShow(stdout = '') {
+  return stdout
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .reduce((fields, line) => {
+      const separatorIndex = line.indexOf('=');
+      if (separatorIndex === -1) return fields;
+      fields[line.slice(0, separatorIndex)] = line.slice(separatorIndex + 1);
+      return fields;
+    }, {});
+}
+
+function nullableSystemdValue(value) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  if (!text || text === '[not set]' || text.toLowerCase() === 'n/a') return null;
+  return text;
+}
+
+function numberOrNull(value) {
+  const text = nullableSystemdValue(value);
+  if (text === null || text === 'infinity' || text === '18446744073709551615') return null;
+  const number = Number(text);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function limitValue(value) {
+  const text = nullableSystemdValue(value);
+  if (text === null || text === '18446744073709551615') return null;
+  return text;
+}
+
+function buildServiceDetails(fields) {
+  return {
+    available: true,
+    description: nullableSystemdValue(fields.Description),
+    loadState: nullableSystemdValue(fields.LoadState),
+    activeState: nullableSystemdValue(fields.ActiveState),
+    subState: nullableSystemdValue(fields.SubState),
+    unitFileState: nullableSystemdValue(fields.UnitFileState),
+    fragmentPath: nullableSystemdValue(fields.FragmentPath),
+    mainPid: numberOrNull(fields.MainPID) || numberOrNull(fields.ExecMainPID),
+    execMainStatus: numberOrNull(fields.ExecMainStatus),
+    restarts: numberOrNull(fields.NRestarts),
+    resources: {
+      memoryCurrent: numberOrNull(fields.MemoryCurrent),
+      memoryMax: limitValue(fields.MemoryMax),
+      cpuUsageNSec: numberOrNull(fields.CPUUsageNSec),
+      cpuQuotaPerSecUSec: limitValue(fields.CPUQuotaPerSecUSec),
+      tasksCurrent: numberOrNull(fields.TasksCurrent),
+      tasksMax: limitValue(fields.TasksMax)
+    }
+  };
+}
+
+async function getServiceDetails(serviceName) {
+  if (!isServiceControlEnabled()) {
+    return { available: false, message: 'Service control is disabled' };
+  }
+
+  if (process.platform === 'win32') {
+    return { available: false, message: 'systemctl is available only on Linux hosts' };
+  }
+
+  try {
+    const propertyArgs = SYSTEMD_DETAIL_PROPERTIES.flatMap((property) => ['--property', property]);
+    const { stdout } = await readSystemctl(['show', '--no-page', ...propertyArgs, serviceName]);
+    return buildServiceDetails(parseSystemctlShow(stdout));
+  } catch (error) {
+    return {
+      available: false,
+      message: (error.stderr || error.message || 'Unable to read service details').trim()
+    };
+  }
+}
+
 async function getServiceActiveStatus(serviceName) {
   if (!isServiceControlEnabled() || process.platform === 'win32') return null;
 
   try {
-    const cmd = systemctlCommand(['is-active', '--quiet', serviceName]);
-    await execFileAsync(cmd.file, cmd.args, { timeout: 2500 });
+    await runSystemctl(['is-active', '--quiet', serviceName], { timeout: 2500 });
     return true;
   } catch (_) {
     return false;
@@ -63,8 +182,80 @@ async function getServiceActiveStatus(serviceName) {
 }
 
 async function runServiceCommand(serviceName, action) {
-  const cmd = systemctlCommand([action, serviceName]);
-  await execFileAsync(cmd.file, cmd.args, { timeout: 10000 });
+  await runSystemctl([action, serviceName], { timeout: 10000 });
+}
+
+function normalizeUnlimited(value) {
+  const text = String(value ?? '').trim().toLowerCase();
+  return !text || text === 'none' || text === 'unlimited' || text === 'infinity';
+}
+
+function parsePositiveNumber(value, label) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new AppError(`${label} must be greater than zero`, 400, 'INVALID_RESOURCE_LIMIT');
+  }
+  return number;
+}
+
+function normalizeCpuQuota(value) {
+  if (normalizeUnlimited(value)) return '';
+
+  const text = String(value).trim();
+  const match = text.match(/^(\d+(?:\.\d+)?)%$/);
+  if (!match) {
+    throw new AppError('CPU quota must be a percentage like 50% or infinity', 400, 'INVALID_RESOURCE_LIMIT');
+  }
+
+  const number = parsePositiveNumber(match[1], 'CPU quota');
+  if (number > 10000) {
+    throw new AppError('CPU quota cannot be greater than 10000%', 400, 'INVALID_RESOURCE_LIMIT');
+  }
+
+  return `${number}%`;
+}
+
+function normalizeMemoryMax(value) {
+  if (normalizeUnlimited(value)) return 'infinity';
+
+  const text = String(value).trim().replace(/\s+/g, '').toUpperCase();
+  const match = text.match(/^(\d+(?:\.\d+)?)([KMGTPE]?B?)?$/);
+  if (!match) {
+    throw new AppError('Memory limit must look like 512M, 1G, a byte count, or infinity', 400, 'INVALID_RESOURCE_LIMIT');
+  }
+
+  parsePositiveNumber(match[1], 'Memory limit');
+  return `${match[1]}${match[2] || ''}`;
+}
+
+function normalizeTasksMax(value) {
+  if (normalizeUnlimited(value)) return 'infinity';
+
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) {
+    throw new AppError('Tasks limit must be a whole number or infinity', 400, 'INVALID_RESOURCE_LIMIT');
+  }
+
+  const number = parsePositiveNumber(text, 'Tasks limit');
+  if (number > 1000000) {
+    throw new AppError('Tasks limit cannot be greater than 1000000', 400, 'INVALID_RESOURCE_LIMIT');
+  }
+
+  return String(number);
+}
+
+function normalizeLimitUpdates(body) {
+  const updates = [];
+  if (Object.prototype.hasOwnProperty.call(body, 'cpuQuota')) {
+    updates.push(['CPUQuota', normalizeCpuQuota(body.cpuQuota)]);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'memoryMax')) {
+    updates.push(['MemoryMax', normalizeMemoryMax(body.memoryMax)]);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'tasksMax')) {
+    updates.push(['TasksMax', normalizeTasksMax(body.tasksMax)]);
+  }
+  return updates;
 }
 
 // ─── Global services ──────────────────────────────────────────────────────────
@@ -80,9 +271,39 @@ async function listServices(_req, res, next) {
       name:   svc.name,
       label:  svc.label,
       active: await getServiceActiveStatus(svc.name),
+      details: await getServiceDetails(svc.name),
       scope:  'global'
     })));
     return res.json({ services: statuses });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * GET /api/services/ekafy
+ * Returns all project-linked services, separated from global host services.
+ */
+async function listEkafyServices(_req, res, next) {
+  try {
+    const linkedServices = await listAllProjectServices();
+    const services = await Promise.all(linkedServices.map(async (svc) => ({
+      id: Number(svc.id),
+      name: svc.service_name,
+      label: svc.label || svc.service_name,
+      active: await getServiceActiveStatus(svc.service_name),
+      details: await getServiceDetails(svc.service_name),
+      scope: 'ekafy',
+      project: {
+        id: Number(svc.project_id),
+        name: svc.project_name,
+        slug: svc.project_slug,
+        status: svc.project_status
+      },
+      createdAt: svc.created_at
+    })));
+
+    return res.json({ services });
   } catch (error) {
     return next(error);
   }
@@ -98,11 +319,18 @@ async function serviceStatus(req, res, next) {
     if (!service) return res.status(400).json({ message: 'Service is not allowed' });
 
     if (!isServiceControlEnabled() || process.platform === 'win32') {
-      return res.json({ service: service.name, label: service.label, active: null, message: 'Status unavailable in this environment' });
+      return res.json({
+        service: service.name,
+        label: service.label,
+        active: null,
+        details: await getServiceDetails(service.name),
+        message: 'Status unavailable in this environment'
+      });
     }
 
     const active = await getServiceActiveStatus(service.name);
-    return res.json({ service: service.name, label: service.label, active });
+    const details = await getServiceDetails(service.name);
+    return res.json({ service: service.name, label: service.label, active, details });
   } catch (error) {
     return next(error);
   }
@@ -134,6 +362,60 @@ async function controlService(req, res, next) {
 }
 
 // ─── Project-linked services ──────────────────────────────────────────────────
+
+/**
+ * PATCH /api/services/ekafy/:name/limits
+ *
+ * Body: { cpuQuota?, memoryMax?, tasksMax? }
+ */
+async function updateEkafyServiceLimits(req, res, next) {
+  try {
+    const serviceName = (req.params.name || '').trim();
+    if (!SERVICE_NAME_PATTERN.test(serviceName)) {
+      return res.status(400).json({ message: 'Invalid service name' });
+    }
+    if (!isServiceControlEnabled()) {
+      return res.status(503).json({ message: 'Service control is disabled. Set ENABLE_SERVICE_CONTROL=true on the Linux VPS.' });
+    }
+    if (process.platform === 'win32') {
+      return res.status(503).json({ message: 'systemctl is available only on Linux hosts' });
+    }
+
+    const linkedService = await findProjectServiceByName(serviceName);
+    if (!linkedService) {
+      return res.status(404).json({ message: 'Service is not linked to an EKAFY project' });
+    }
+
+    const updates = normalizeLimitUpdates(req.body || {});
+    if (!updates.length) {
+      return res.status(400).json({ message: 'Provide at least one limit to update' });
+    }
+
+    for (const [property, value] of updates) {
+      await runSystemctl(['set-property', serviceName, `${property}=${value}`], { timeout: 10000 });
+    }
+
+    await createLog({
+      userId: req.user.id,
+      action: `updated resource limits for project service ${serviceName}`
+    });
+
+    return res.json({
+      message: `${serviceName} resource limits updated`,
+      service: {
+        name: serviceName,
+        active: await getServiceActiveStatus(serviceName),
+        details: await getServiceDetails(serviceName)
+      }
+    });
+  } catch (error) {
+    if (error instanceof AppError) return next(error);
+    return next(new AppError('Service limit update failed', 503, 'SERVICE_LIMIT_UPDATE_FAILED', {
+      service: req.params.name,
+      ...commandDetails(error)
+    }));
+  }
+}
 
 async function canManageProject(user, projectId) {
   if (user.role === 'admin') return true;
@@ -192,8 +474,8 @@ async function addLinkedService(req, res, next) {
     const serviceName = (req.body.serviceName || '').trim();
     const label       = (req.body.label || serviceName).trim();
 
-    if (!serviceName || !/^[a-zA-Z0-9_.-]{1,128}$/.test(serviceName)) {
-      return res.status(400).json({ message: 'Invalid service name (letters, numbers, dots, dashes, underscores)' });
+    if (!serviceName || !SERVICE_NAME_PATTERN.test(serviceName)) {
+      return res.status(400).json({ message: 'Invalid service name (letters, numbers, dots, dashes, underscores, @)' });
     }
 
     await addProjectService({ projectId, serviceName, label });
@@ -300,8 +582,10 @@ async function linkedServiceStatus(req, res, next) {
 
 module.exports = {
   listServices,
+  listEkafyServices,
   serviceStatus,
   controlService,
+  updateEkafyServiceLimits,
   listLinkedServices,
   addLinkedService,
   removeLinkedService,

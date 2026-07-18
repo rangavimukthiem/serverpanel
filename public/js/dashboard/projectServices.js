@@ -6,6 +6,7 @@ import { api } from '../shared/api.js';
 import { escapeHtml } from '../shared/dom.js';
 import { reportGlobalError } from '../shared/errors.js';
 import { isAdmin } from '../shared/auth.js';
+import { confirmDialog } from '../shared/dialog.js';
 import { dashboardState } from './state.js';
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -89,7 +90,14 @@ function bindServiceActions(project, canManage) {
     const unlinkBtn = e.target.closest('[data-unlink-svc]');
     if (unlinkBtn) {
       const svcName = unlinkBtn.dataset.unlinkSvc;
-      if (!window.confirm(`Unlink service "${svcName}" from this project?`)) return;
+      const confirmed = await confirmDialog({
+        eyebrow: 'Linked service',
+        title: 'Unlink service?',
+        message: `Unlink service "${svcName}" from this project?`,
+        confirmLabel: 'Unlink',
+        variant: 'warning'
+      });
+      if (!confirmed) return;
       try {
         await api(`/api/projects/${project.id}/services/${svcName}`, { method: 'DELETE' });
         await refreshProjectServices(project, canManage);

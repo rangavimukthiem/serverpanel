@@ -8,7 +8,7 @@
 import { api } from '../shared/api.js';
 import { clearSession } from '../shared/auth.js';
 import { dashboardState } from '../dashboard/state.js';
-import { loadServices, runServiceAction, refreshServiceStatuses } from '../dashboard/services.js';
+import { loadServices, runServiceAction, refreshServiceStatuses, saveEkafyServiceLimits } from '../dashboard/services.js';
 import { loadProjects, bindProjectListClicks } from '../dashboard/projects.js';
 import { loadUsers } from '../dashboard/users.js';
 import { bindAdminForms } from '../dashboard/forms.js';
@@ -124,13 +124,39 @@ async function bootDashboard() {
   }
 
   // Services action delegation
-  const servicesGrid = document.getElementById('servicesGrid');
-  if (servicesGrid) {
-    servicesGrid.addEventListener('click', (e) => {
+  ['servicesGrid', 'ekafyServicesGrid'].forEach((gridId) => {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+
+    grid.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-service][data-action]');
-      if (btn) runServiceAction(btn.dataset.service, btn.dataset.action);
+      if (!btn) return;
+
+      btn.disabled = true;
+      try {
+        await runServiceAction(btn.dataset.service, btn.dataset.action, {
+          scope: btn.dataset.scope || 'global',
+          projectId: btn.dataset.projectId
+        });
+      } finally {
+        btn.disabled = false;
+      }
     });
-  }
+
+    grid.addEventListener('submit', async (e) => {
+      const form = e.target.closest('[data-service-limit-form]');
+      if (!form) return;
+      e.preventDefault();
+
+      const submitButton = form.querySelector('button[type="submit"]');
+      if (submitButton) submitButton.disabled = true;
+      try {
+        await saveEkafyServiceLimits(form);
+      } finally {
+        if (submitButton) submitButton.disabled = false;
+      }
+    });
+  });
 
   // ── Init modules ────────────────────────────────────────────────────────────
   syncDashboardTabState();

@@ -6,6 +6,7 @@
 import { api } from '../shared/api.js';
 import { reportGlobalError } from '../shared/errors.js';
 import { redirectOnAuthError } from '../shared/auth.js';
+import { confirmDialog } from '../shared/dialog.js';
 import { loadProjects } from './projects.js';
 import { loadUsers } from './users.js';
 import { resetProjectWizard, readProjectWizardConfig } from './wizard.js';
@@ -145,7 +146,14 @@ function bindMemberForm() {
     usersTable.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-user-delete]');
       if (!btn) return;
-      if (!window.confirm('Delete this user? This removes their account and all project access.')) return;
+      const confirmed = await confirmDialog({
+        eyebrow: 'User management',
+        title: 'Delete user?',
+        message: 'Delete this user? This removes their account and all project access.',
+        confirmLabel: 'Delete User',
+        variant: 'danger'
+      });
+      if (!confirmed) return;
       if (message) message.textContent = 'Removing…';
       try {
         await api(`/api/users/${btn.dataset.userDelete}`, { method: 'DELETE' });

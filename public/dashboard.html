@@ -93,7 +93,27 @@
             <button id="refreshStatusButton" class="ghost-button" type="button">↻ Refresh</button>
           </div>
 
-          <div id="servicesGrid" class="service-grid"></div>
+          <div class="services-stack">
+            <section class="services-section">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Host services</p>
+                  <h4>Global services</h4>
+                </div>
+              </div>
+              <div id="servicesGrid" class="service-grid"></div>
+            </section>
+
+            <section class="services-section">
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Project units</p>
+                  <h4>EKAFY project services</h4>
+                </div>
+              </div>
+              <div id="ekafyServicesGrid" class="service-grid service-grid-wide"></div>
+            </section>
+          </div>
           <p id="serviceMessage" class="message" role="status"></p>
         </section>
 

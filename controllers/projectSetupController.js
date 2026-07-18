@@ -114,6 +114,103 @@ function commandErrorDetails(error) {
   };
 }
 
+function nginxSetupError(error) {
+  const stderr = error.stderr || '';
+  const missingCertMatch = findMissingCertificate(error);
+  const rollbackWarnings = Array.isArray(error.rollbackWarnings) ? error.rollbackWarnings : [];
+
+  if (missingCertMatch) {
+    return new AppError(
+      `Nginx has an enabled SSL site with a missing certificate: ${missingCertMatch[1]}. Reissue that certificate with certbot or disable the stale Nginx site, then run Nginx setup again.`,
+      503,
+      'NGINX_MISSING_CERTIFICATE',
+      { stderr: stderr.trim(), certificatePath: missingCertMatch[1], rollbackWarnings }
+    );
+  }
+
+  return new AppError(
+    `Nginx setup failed: ${error.message}`,
+    503,
+    'NGINX_SETUP_FAILED',
+    { stderr, rollbackWarnings }
+  );
+}
+
+function findMissingCertificate(error) {
+  const text = [
+    error?.stderr,
+    error?.stdout,
+    error?.message,
+    error?.details?.stderr,
+    error?.details?.stdout
+  ].filter(Boolean).join('\n');
+
+  return text.match(/cannot load certificate "([^"]+)"/);
+}
+
+function missingCertificateError(error, action) {
+  const missingCertMatch = findMissingCertificate(error);
+  if (!missingCertMatch) return null;
+
+  return new AppError(
+    `Cannot ${action} because Nginx has an enabled SSL site with a missing certificate: ${missingCertMatch[1]}. Reissue that certificate with certbot or disable the stale Nginx site, then try again.`,
+    503,
+    'NGINX_MISSING_CERTIFICATE',
+    { ...commandErrorDetails(error), certificatePath: missingCertMatch[1] }
+  );
+}
+
+async function readTextIfExists(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function readLinkIfExists(filePath) {
+  try {
+    return await fs.readlink(filePath);
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function unlinkIfExists(filePath) {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
+
+async function restoreNginxConfig(configPath, enabledPath, previousConfig, previousEnabledTarget) {
+  const warnings = [];
+
+  try {
+    await unlinkIfExists(enabledPath);
+    if (previousEnabledTarget) {
+      await fs.symlink(previousEnabledTarget, enabledPath);
+    }
+  } catch (error) {
+    warnings.push(`restore enabled link: ${error.message}`);
+  }
+
+  try {
+    if (previousConfig === null) {
+      await unlinkIfExists(configPath);
+    } else {
+      await fs.writeFile(configPath, previousConfig, 'utf8');
+    }
+  } catch (error) {
+    warnings.push(`restore config: ${error.message}`);
+  }
+
+  return warnings;
+}
+
 // ─── Phase 1: Folder scaffold ─────────────────────────────────────────────────
 
 /**
@@ -420,6 +517,9 @@ async function generateNginx(req, res, next) {
       return res.status(400).json({ message: 'PHP-FPM socket must look like /run/php/php8.1-fpm.sock' });
     }
 
+    await fs.mkdir(path.join(project.path, 'public'), { recursive: true });
+    await fs.mkdir(path.join(project.path, 'logs'), { recursive: true });
+
     const configContent = buildRuntimeNginxConfig(runtime, {
       slug: project.slug,
       domain,
@@ -430,16 +530,23 @@ async function generateNginx(req, res, next) {
 
     const configPath  = path.join(NGINX_SITES_AVAILABLE, project.slug);
     const enabledPath = path.join(NGINX_SITES_ENABLED, project.slug);
+    const previousConfig = await readTextIfExists(configPath);
+    const previousEnabledTarget = await readLinkIfExists(enabledPath);
 
     await fs.writeFile(configPath, configContent, 'utf8');
 
     // Symlink to sites-enabled (remove stale link if exists)
-    try { await fs.unlink(enabledPath); } catch (_) { /* ok if missing */ }
+    await unlinkIfExists(enabledPath);
     await fs.symlink(configPath, enabledPath);
 
-    // Test and reload nginx
-    await runRootCommand('nginx', ['-t'], { timeout: 5000 });
-    await runRootCommand('systemctl', ['reload', 'nginx'], { timeout: 8000 });
+    try {
+      // Test and reload nginx
+      await runRootCommand('nginx', ['-t'], { timeout: 5000 });
+      await runRootCommand('systemctl', ['reload', 'nginx'], { timeout: 8000 });
+    } catch (error) {
+      error.rollbackWarnings = await restoreNginxConfig(configPath, enabledPath, previousConfig, previousEnabledTarget);
+      throw error;
+    }
 
     // Persist domain + port on the project record
     await updateProjectFields(projectId, {
@@ -473,12 +580,7 @@ async function generateNginx(req, res, next) {
       runtime
     });
   } catch (error) {
-    return next(new AppError(
-      `Nginx setup failed: ${error.message}`,
-      503,
-      'NGINX_SETUP_FAILED',
-      { stderr: error.stderr }
-    ));
+    return next(nginxSetupError(error));
   }
 }
 
@@ -530,6 +632,11 @@ const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
     } catch (certbotError) {
       if (!allowSelfSignedSslFallback()) {
         await updateProjectFields(projectId, { ssl_enabled: 0 });
+
+        const missingCertError = missingCertificateError(certbotError, 'provision SSL');
+        if (missingCertError) {
+          return next(missingCertError);
+        }
 
         return next(new AppError(
           'Let\'s Encrypt SSL provisioning failed. No self-signed certificate was installed because Cloudflare Full (strict) requires a trusted origin certificate.',

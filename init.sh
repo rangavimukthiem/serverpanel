@@ -398,12 +398,16 @@ configure_sudoers_for_services() {
   nginx_path="$(command -v nginx || echo '/usr/sbin/nginx')"
   certbot_path="$(command -v certbot || echo '/usr/bin/certbot')"
 
-  log "Allowing EKAFY service user to control whitelisted systemd units & Nginx checks"
+  log "Allowing EKAFY service user to control whitelisted units, cleanup reloads, Nginx checks, and project resource limits"
   cat > "/etc/sudoers.d/${APP_NAME}-services" <<SUDOERS
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path} stop nginx, ${systemctl_path} restart nginx, ${systemctl_path} reload nginx, ${systemctl_path} is-active --quiet nginx, ${nginx_path} -t
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mysql, ${systemctl_path} stop mysql, ${systemctl_path} restart mysql, ${systemctl_path} is-active --quiet mysql
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mariadb, ${systemctl_path} stop mariadb, ${systemctl_path} restart mariadb, ${systemctl_path} is-active --quiet mariadb
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start apache2, ${systemctl_path} stop apache2, ${systemctl_path} restart apache2, ${systemctl_path} is-active --quiet apache2
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} daemon-reload
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} set-property * CPUQuota=*
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} set-property * MemoryMax=*
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} set-property * TasksMax=*
 ${APP_USER} ALL=(root) NOPASSWD: ${certbot_path} --nginx -d * --non-interactive --agree-tos --redirect -m *
 ${APP_USER} ALL=(root) NOPASSWD: ${certbot_path} --nginx -d * --non-interactive --agree-tos --redirect --register-unsafely-without-email
 ${APP_USER} ALL=(root) NOPASSWD: ${certbot_path} delete --cert-name * --non-interactive
