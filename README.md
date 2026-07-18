@@ -778,22 +778,17 @@ Group=www-data
 WantedBy=multi-user.target
 ```
 
-Install it:
+For API runtimes, EKAFY creates and enables a project-owned systemd unit during project creation. The default unit name is the project slug, and the default command is `npm start` for Node/static API projects or `python3 app.py` for Python projects.
 
-```bash
-sudo nano /etc/systemd/system/slbftracker.service
-sudo systemctl daemon-reload
-sudo systemctl enable slbftracker
-sudo systemctl start slbftracker
-sudo systemctl status slbftracker
-```
+To create or update a unit later:
 
-Then in EKAFY:
-
-1. Open project.
+1. Open the project.
 2. Go to Services.
-3. Link service name `slbftracker`.
-4. Use Start, Restart, Stop, and status controls from the dashboard.
+3. Click `+ Service`.
+4. Enter the service name, label, and ExecStart command.
+5. Keep `Create/update unit` checked, then save.
+
+Use the project Services tab to Start, Restart, Stop, or rewrite the unit.
 
 ## Nginx Behavior by Runtime
 
@@ -989,6 +984,7 @@ DELETE /api/users/:id
 POST   /api/projects
 DELETE /api/projects/:id
 PATCH  /api/projects/:id/status
+POST   /api/projects/:id/services/:name/unit
 POST   /api/services/:name/:action
 PATCH  /api/services/ekafy/:name/limits
 ```

@@ -10,10 +10,16 @@ const {
   removeProjectMember
 } = require('../models/projectModel');
 const { getAllProjectEnvsAsObject } = require('../models/projectEnvModel');
-const { listProjectServices } = require('../models/projectServiceModel');
+const { addProjectService, findProjectServiceByName, listProjectServices } = require('../models/projectServiceModel');
 const { findUserById } = require('../models/userModel');
 const { createLog } = require('../models/logModel');
 const { query, adminQuery } = require('../config/db');
+const {
+  canUseProjectSystemd,
+  createOrUpdateProjectServiceUnit,
+  projectNeedsSystemdService,
+  removeProjectServiceUnit
+} = require('../utils/projectSystemd');
 const fs = require('fs').promises;
 const path = require('path');
 const { execFile } = require('child_process');
@@ -36,7 +42,6 @@ const PHP_FPM_SOCKET_PATTERN = /^\/run\/php\/php\d+\.\d+-fpm\.sock$/;
 const PROJECTS_ROOT = process.env.PROJECTS_ROOT || '/srv';
 const NGINX_SITES_AVAILABLE = '/etc/nginx/sites-available';
 const NGINX_SITES_ENABLED = '/etc/nginx/sites-enabled';
-const SYSTEMD_SYSTEM_DIR = '/etc/systemd/system';
 
 function trimText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -252,6 +257,64 @@ async function listProjects(req, res, next) {
   }
 }
 
+async function createDefaultProjectService(project, userId) {
+  if (!projectNeedsSystemdService(project.config)) return null;
+
+  const serviceName = project.slug;
+  const label = `${project.name} service`;
+  const serviceSetup = {
+    serviceName,
+    label,
+    linked: false,
+    unitCreated: false,
+    skipped: false,
+    message: ''
+  };
+
+  const existingOwner = await findProjectServiceByName(serviceName);
+  if (existingOwner && Number(existingOwner.project_id) !== project.id) {
+    serviceSetup.error = {
+      message: `Service is already linked to project ${existingOwner.project_name || existingOwner.project_slug || existingOwner.project_id}`,
+      code: 'SERVICE_ALREADY_LINKED',
+      details: { serviceName, projectId: existingOwner.project_id }
+    };
+    serviceSetup.message = serviceSetup.error.message;
+    return serviceSetup;
+  }
+
+  await addProjectService({ projectId: project.id, serviceName, label });
+  serviceSetup.linked = true;
+
+  if (!canUseProjectSystemd()) {
+    serviceSetup.skipped = true;
+    serviceSetup.message = 'Project service linked, but unit creation was skipped because service control is disabled or this host is not Linux.';
+    return serviceSetup;
+  }
+
+  try {
+    const unit = await createOrUpdateProjectServiceUnit(project, {
+      serviceName,
+      label,
+      runtime: project.config.runtime,
+      enable: true,
+      start: false
+    });
+    serviceSetup.unitCreated = true;
+    serviceSetup.unit = unit;
+    serviceSetup.message = `Created and enabled ${unit.unitName}.`;
+    await createLog({ userId, action: `created systemd service ${serviceName} for project ${project.name}` });
+  } catch (error) {
+    serviceSetup.error = {
+      message: error.message,
+      code: error.code || 'PROJECT_SERVICE_UNIT_FAILED',
+      details: error.details || null
+    };
+    serviceSetup.message = `Project service linked, but unit creation failed: ${error.message}`;
+  }
+
+  return serviceSetup;
+}
+
 async function createManagedProject(req, res, next) {
   try {
     const { name, slug, status = 'active', domain, port, gitRepoUrl, gitBranch = 'main' } = req.body;
@@ -308,8 +371,11 @@ async function createManagedProject(req, res, next) {
       action: `created project ${project.name} with ${projectConfig.kind} wizard`
     });
 
+    const serviceSetup = await createDefaultProjectService(project, req.user.id);
+
     return res.status(201).json({
       project,
+      serviceSetup,
       wizard: {
         database: buildDatabaseWizard(project.config),
         api: buildApiWizard(project.config)
@@ -544,18 +610,6 @@ function isSafeSqlAccountHost(value) {
   return /^[A-Za-z0-9_.:%-]{1,253}$/.test(trimText(value));
 }
 
-function isSafeSystemdServiceName(value) {
-  return /^[A-Za-z0-9_.@-]{1,128}(?:\.service)?$/.test(trimText(value));
-}
-
-function serviceUnitFilePath(serviceName) {
-  const value = trimText(serviceName);
-  if (!isSafeSystemdServiceName(value)) return null;
-
-  const unitName = value.endsWith('.service') ? value : `${value}.service`;
-  return path.posix.join(SYSTEMD_SYSTEM_DIR, unitName);
-}
-
 async function removePathIfExists(targetPath) {
   await fs.rm(targetPath, { recursive: true, force: true });
 }
@@ -690,18 +744,10 @@ async function cleanupProjectServices(projectId, warnings) {
       warnings.push(`Project service reset (${serviceName}): ${error.message}`);
     }
 
-    const unitPath = serviceUnitFilePath(serviceName);
-    if (!unitPath) {
-      warnings.push(`Project service unit skipped (${serviceName}): unsafe service name`);
-      continue;
-    }
-
-    await removeFileIfExists(unitPath, `Project service unit (${serviceName})`, warnings);
-
     try {
-      await fs.rm(`${unitPath}.d`, { recursive: true, force: true });
+      await removeProjectServiceUnit(serviceName);
     } catch (error) {
-      warnings.push(`Project service drop-ins (${serviceName}): ${error.message}`);
+      warnings.push(`Project service unit (${serviceName}): ${error.message}`);
     }
   }
 

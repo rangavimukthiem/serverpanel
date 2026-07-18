@@ -418,12 +418,21 @@
               <div id="detailServices" class="detail-panel" hidden>
                 <div class="section-heading">
                   <h4>Linked Services</h4>
-                  <button id="addServiceBtn" class="admin-only" type="button">+ Link</button>
+                  <button id="addServiceBtn" class="admin-only" type="button">+ Service</button>
                 </div>
                 <form id="addServiceForm" class="inline-form add-service-form admin-only" hidden>
                   <input id="newSvcName"  type="text" placeholder="systemd unit name (e.g. my-app)">
                   <input id="newSvcLabel" type="text" placeholder="Display label">
-                  <button type="submit">Link</button>
+                  <input id="newSvcExec"  type="text" placeholder="ExecStart (e.g. npm start)">
+                  <label class="check-inline">
+                    <input id="newSvcCreateUnit" type="checkbox" checked>
+                    <span>Create/update unit</span>
+                  </label>
+                  <label class="check-inline">
+                    <input id="newSvcStart" type="checkbox">
+                    <span>Start after save</span>
+                  </label>
+                  <button type="submit">Save</button>
                   <button type="button" id="cancelAddService" class="ghost-button">Cancel</button>
                 </form>
                 <div id="projectServicesList" class="service-grid"></div>

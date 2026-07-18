@@ -1713,7 +1713,27 @@ label {
 
 /* ─── Add service form ─────────────────────────────────────────────────────── */
 .add-service-form {
-  grid-template-columns: 1.2fr 1.5fr auto auto;
+  grid-template-columns: 1fr 1.1fr 1.5fr auto auto auto auto;
+  align-items: center;
+}
+
+.check-inline {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 7px;
+  line-height: 1.2;
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.check-inline input {
+  accent-color: var(--accent);
+  height: 16px;
+  margin: 0;
+  width: 16px;
 }
 
 /* ─── Table panel ──────────────────────────────────────────────────────────── */
@@ -1728,6 +1748,10 @@ label {
   }
 
   .dashboard-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .add-service-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

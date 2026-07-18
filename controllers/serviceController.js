@@ -29,6 +29,12 @@ const {
 } = require('../models/projectServiceModel');
 const { createLog } = require('../models/logModel');
 const { AppError } = require('../errors/AppError');
+const {
+  createOrUpdateProjectServiceUnit,
+  defaultExecStart,
+  removeProjectServiceUnit,
+  unitNameForService
+} = require('../utils/projectSystemd');
 
 const execFileAsync = promisify(execFile);
 
@@ -112,6 +118,11 @@ function nullableSystemdValue(value) {
   const text = String(value).trim();
   if (!text || text === '[not set]' || text.toLowerCase() === 'n/a') return null;
   return text;
+}
+
+function bodyBoolean(value, fallback = false) {
+  if (value === undefined || value === null) return fallback;
+  return value === true || value === 'true' || value === '1' || value === 1;
 }
 
 function numberOrNull(value) {
@@ -368,7 +379,8 @@ async function controlService(req, res, next) {
   } catch (error) {
     return next(new AppError('Service command failed', 503, 'SERVICE_COMMAND_FAILED', {
       service: req.params.name,
-      action:  req.params.action
+      action:  req.params.action,
+      command: commandDetails(error)
     }));
   }
 }
@@ -468,7 +480,7 @@ async function listLinkedServices(req, res, next) {
 /**
  * POST /api/projects/:id/services
  *
- * Body: { serviceName, label }
+ * Body: { serviceName, label, createUnit?, execStart?, serviceUser?, serviceGroup?, enable?, start? }
  */
 async function addLinkedService(req, res, next) {
   try {
@@ -485,15 +497,150 @@ async function addLinkedService(req, res, next) {
 
     const serviceName = (req.body.serviceName || '').trim();
     const label       = (req.body.label || serviceName).trim();
+    const createUnit  = bodyBoolean(req.body.createUnit, false);
 
     if (!serviceName || !SERVICE_NAME_PATTERN.test(serviceName)) {
       return res.status(400).json({ message: 'Invalid service name (letters, numbers, dots, dashes, underscores, @)' });
     }
 
-    await addProjectService({ projectId, serviceName, label });
-    await createLog({ userId: req.user.id, action: `linked service ${serviceName} to project ${project.name}` });
+    const existingOwner = await findProjectServiceByName(serviceName);
+    if (existingOwner && Number(existingOwner.project_id) !== projectId) {
+      return res.status(409).json({
+        message: `Service is already linked to project ${existingOwner.project_name || existingOwner.project_slug || existingOwner.project_id}`
+      });
+    }
 
-    return res.status(201).json({ message: 'Service linked to project', serviceName, label });
+    let unit = null;
+    if (createUnit) {
+      unit = await createOrUpdateProjectServiceUnit(project, {
+        serviceName,
+        label,
+        runtime: req.body.runtime || project.config?.runtime,
+        execStart: req.body.execStart,
+        serviceUser: req.body.serviceUser,
+        serviceGroup: req.body.serviceGroup,
+        enable: bodyBoolean(req.body.enable, true),
+        start: bodyBoolean(req.body.start, false)
+      });
+    }
+
+    await addProjectService({ projectId, serviceName, label });
+    await createLog({
+      userId: req.user.id,
+      action: createUnit
+        ? `created systemd unit and linked service ${serviceName} to project ${project.name}`
+        : `linked service ${serviceName} to project ${project.name}`
+    });
+
+    return res.status(201).json({
+      message: createUnit ? 'Service linked and unit created' : 'Service linked to project',
+      serviceName,
+      label,
+      unit
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * POST /api/projects/:id/services/:name/unit
+ *
+ * Create or update the systemd unit file for an already-linked service.
+ */
+async function createLinkedServiceUnit(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    const serviceName = (req.params.name || '').trim();
+
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+
+    if (!serviceName || !SERVICE_NAME_PATTERN.test(serviceName)) {
+      return res.status(400).json({ message: 'Invalid service name' });
+    }
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManageProject(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const linked = await isServiceLinkedToProject(projectId, serviceName);
+    if (!linked) return res.status(400).json({ message: 'Service is not linked to this project' });
+
+    const unit = await createOrUpdateProjectServiceUnit(project, {
+      serviceName,
+      label: req.body.label || serviceName,
+      runtime: req.body.runtime || project.config?.runtime,
+      execStart: req.body.execStart,
+      serviceUser: req.body.serviceUser,
+      serviceGroup: req.body.serviceGroup,
+      enable: bodyBoolean(req.body.enable, true),
+      start: bodyBoolean(req.body.start, false)
+    });
+
+    await createLog({ userId: req.user.id, action: `updated systemd unit ${serviceName} for project ${project.name}` });
+
+    return res.json({
+      message: `${unitNameForService(serviceName)} written`,
+      serviceName,
+      defaultExecStart: defaultExecStart(project.config?.runtime),
+      unit
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * DELETE /api/projects/:id/services/:name/unit
+ *
+ * Stop, disable, and remove the systemd unit file for a linked service.
+ * Pass ?unlink=true to also remove the project service link.
+ */
+async function deleteLinkedServiceUnit(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    const serviceName = (req.params.name || '').trim();
+
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+
+    if (!serviceName || !SERVICE_NAME_PATTERN.test(serviceName)) {
+      return res.status(400).json({ message: 'Invalid service name' });
+    }
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManageProject(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const linked = await isServiceLinkedToProject(projectId, serviceName);
+    if (!linked) return res.status(400).json({ message: 'Service is not linked to this project' });
+
+    const unit = await removeProjectServiceUnit(serviceName);
+    const unlink = bodyBoolean(req.query.unlink ?? req.body.unlink, false);
+    let unlinked = false;
+
+    if (unlink) {
+      unlinked = await removeProjectService({ projectId, serviceName });
+    }
+
+    await createLog({
+      userId: req.user.id,
+      action: `${unlinked ? 'deleted and unlinked' : 'deleted unit for'} project service ${serviceName} on ${project.name}`
+    });
+
+    return res.json({
+      message: unlinked ? 'Service unit deleted and service unlinked' : 'Service unit deleted',
+      serviceName,
+      unlinked,
+      unit
+    });
   } catch (error) {
     return next(error);
   }
@@ -559,7 +706,8 @@ async function controlLinkedService(req, res, next) {
   } catch (error) {
     return next(new AppError('Service command failed', 503, 'SERVICE_COMMAND_FAILED', {
       service: req.params.name,
-      action:  req.params.action
+      action:  req.params.action,
+      command: commandDetails(error)
     }));
   }
 }
@@ -600,6 +748,8 @@ module.exports = {
   updateEkafyServiceLimits,
   listLinkedServices,
   addLinkedService,
+  createLinkedServiceUnit,
+  deleteLinkedServiceUnit,
   removeLinkedService,
   controlLinkedService,
   linkedServiceStatus

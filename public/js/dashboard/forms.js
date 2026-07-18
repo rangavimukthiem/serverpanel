@@ -4,7 +4,7 @@
  */
 
 import { api } from '../shared/api.js';
-import { reportGlobalError } from '../shared/errors.js';
+import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
 import { redirectOnAuthError } from '../shared/auth.js';
 import { confirmDialog } from '../shared/dialog.js';
 import { loadProjects } from './projects.js';
@@ -89,7 +89,7 @@ function bindProjectForm() {
 
     try {
       const config = readProjectWizardConfig();
-      await api('/api/projects', {
+      const data = await api('/api/projects', {
         method: 'POST',
         body: JSON.stringify({
           name:       form.name.value.trim(),
@@ -102,6 +102,13 @@ function bindProjectForm() {
           config
         })
       });
+      if (data.serviceSetup?.error) {
+        showGlobalMessage(data.serviceSetup.message, 'error');
+      } else if (data.serviceSetup?.skipped) {
+        showGlobalMessage(data.serviceSetup.message, 'info');
+      } else if (data.serviceSetup?.unitCreated) {
+        showGlobalMessage(data.serviceSetup.message, 'success');
+      }
       resetProjectWizard();
       closeNewProjectModal();
       await loadProjects();

@@ -35,6 +35,7 @@ const { list: listEnvKeys, upsert: upsertEnv, remove: removeEnv } = require('../
 const {
   listLinkedServices,
   addLinkedService,
+  createLinkedServiceUnit,
   removeLinkedService,
   controlLinkedService,
   linkedServiceStatus
@@ -91,6 +92,7 @@ router.delete('/:id/env/:key', removeEnv);
 // ── Project-linked systemd services ──────────────────────────────────────────
 router.get('/:id/services',                    listLinkedServices);
 router.post('/:id/services',                   requireAdmin, addLinkedService);
+router.post('/:id/services/:name/unit',        requireAdmin, createLinkedServiceUnit);
 router.delete('/:id/services/:name',           requireAdmin, removeLinkedService);
 router.get('/:id/services/:name/status',       linkedServiceStatus);
 router.post('/:id/services/:name/:action',     controlLinkedService);

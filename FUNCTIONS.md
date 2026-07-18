@@ -186,17 +186,25 @@ Keys must match `^[A-Z][A-Z0-9_]{0,127}$`.
 | Route | Method | Auth | Description |
 |---|---|---|---|
 | `/api/projects/:id/services` | GET | Member | List linked services with live status |
-| `/api/projects/:id/services` | POST | **Admin** | Link a systemd service to this project |
+| `/api/projects/:id/services` | POST | **Admin** | Link a systemd service, optionally creating/updating the unit file |
+| `/api/projects/:id/services/:name/unit` | POST | **Admin** | Create or update the systemd unit file for a linked service |
 | `/api/projects/:id/services/:name` | DELETE | **Admin** | Unlink a service |
 | `/api/projects/:id/services/:name/status` | GET | Member | Get active status of a linked service |
 | `/api/projects/:id/services/:name/:action` | POST | Manager | `start`, `stop`, or `restart` a linked service |
 
 **Link body:**
 ```json
-{ "serviceName": "my-app", "label": "My App Service" }
+{
+  "serviceName": "my-app",
+  "label": "My App Service",
+  "createUnit": true,
+  "execStart": "npm start",
+  "enable": true,
+  "start": false
+}
 ```
 
-Linked services are validated against the `project_services` table — only services registered for a project can be controlled through its project routes.
+API runtimes (`node-app`, `python-api`, `static-api`) automatically link a project-owned service at project creation. Linked services are validated against the `project_services` table — only services registered for a project can be controlled through its project routes.
 
 ---
 
