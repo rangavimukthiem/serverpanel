@@ -21,7 +21,14 @@ const {
 } = require('../controllers/projectController');
 
 const { scaffold, generateNginx, provisionSsl } = require('../controllers/projectSetupController');
-const { provision, listTables, runQuery, getPresets } = require('../controllers/projectDatabaseController');
+const {
+  provision,
+  listTables,
+  runQuery,
+  uploadDatabaseImport,
+  importSpreadsheet,
+  getPresets
+} = require('../controllers/projectDatabaseController');
 const { status: gitStatus, init: gitInit, clone: gitClone, pull: gitPull, push: gitPush } = require('../controllers/projectGitController');
 const { list: listEndpoints, add: addEndpoint, update: updateEndpoint, remove: removeEndpoint } = require('../controllers/projectEndpointController');
 const { list: listEnvKeys, upsert: upsertEnv, remove: removeEnv } = require('../controllers/projectEnvController');
@@ -60,6 +67,7 @@ router.post('/:id/setup/ssl',      provisionSsl);
 router.post('/:id/database/provision', provision);
 router.get('/:id/database/tables',     listTables);
 router.post('/:id/database/query',     runQuery);
+router.post('/:id/database/import',    uploadDatabaseImport, importSpreadsheet);
 router.get('/:id/database/presets',    getPresets);
 
 // ── Git operations ────────────────────────────────────────────────────────────

@@ -1852,3 +1852,130 @@ label {
     grid-template-columns: 1fr;
   }
 }
+
+/* Excel import */
+.excel-import-form {
+  grid-template-columns: 1.1fr 1.5fr 1fr 96px auto auto;
+}
+
+.excel-import-output {
+  display: grid;
+  gap: 12px;
+}
+
+.excel-import-output:empty {
+  display: none;
+}
+
+.import-status {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+}
+
+.import-status span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-status-info {
+  background: rgba(96, 165, 250, 0.08);
+  border-color: rgba(96, 165, 250, 0.24);
+}
+
+.import-status-error {
+  background: var(--danger-dim);
+  border-color: rgba(251, 113, 133, 0.28);
+}
+
+.import-status-success {
+  background: var(--success-dim);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.import-preview-summary {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.import-preview-summary>div {
+  background: var(--panel-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.import-preview-summary strong,
+.import-preview-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.import-preview-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-mapping-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.import-map-pill {
+  align-items: center;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 5px 10px;
+}
+
+.import-map-pill strong,
+.import-map-pill span {
+  overflow-wrap: anywhere;
+}
+
+.import-map-pill strong {
+  color: var(--text);
+}
+
+.import-map-pill span {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.import-warning-list {
+  background: var(--warning-dim);
+  border: 1px solid rgba(251, 191, 36, 0.24);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  margin: 0;
+  padding: 10px 14px 10px 28px;
+}
+
+.import-sample-table {
+  max-height: 240px;
+  overflow: auto;
+}
+
+@media (max-width: 960px) {
+  .excel-import-form,
+  .import-preview-summary {
+    grid-template-columns: 1fr;
+  }
+}

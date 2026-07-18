@@ -327,6 +327,26 @@
                 </div>
 
                 <div class="wizard-card">
+                  <div class="section-heading">
+                    <div>
+                      <h4>Excel Import</h4>
+                      <p class="eyebrow">Feed .xlsx rows into an existing table</p>
+                    </div>
+                  </div>
+                  <form id="excelImportForm" class="inline-form excel-import-form">
+                    <select id="excelImportTable" required>
+                      <option value="">Create a table first</option>
+                    </select>
+                    <input id="excelImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                    <input id="excelSheetName" type="text" placeholder="Sheet name (optional)">
+                    <input id="excelHeaderRow" type="number" min="1" max="1000" value="1" aria-label="Header row">
+                    <button id="previewExcelImport" class="ghost-button" type="button">Preview</button>
+                    <button id="runExcelImport" type="submit">Import</button>
+                  </form>
+                  <div id="excelImportOutput" class="excel-import-output"></div>
+                </div>
+
+                <div class="wizard-card">
                   <h4>SQL Query Tool</h4>
                   <div class="preset-row" id="sqlPresetRow"></div>
                   <textarea id="sqlEditor" rows="7" placeholder="-- Write SQL here&#10;SELECT * FROM `your_table` LIMIT 100;"></textarea>
