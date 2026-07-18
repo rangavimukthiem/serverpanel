@@ -193,6 +193,24 @@ async function getServiceActiveStatus(serviceName) {
   }
 }
 
+/**
+ * Returns true when systemd knows about the unit (LoadState != not-found).
+ * Uses unprivileged `systemctl show` so it works even without sudo.
+ */
+async function checkUnitExists(serviceName) {
+  try {
+    const { stdout } = await readSystemctl(
+      ['show', '--no-page', '--property', 'LoadState', serviceName],
+      { timeout: 4000 }
+    );
+    const loadState = stdout.trim().replace(/^LoadState=/, '');
+    return loadState !== 'not-found' && loadState !== '';
+  } catch (_) {
+    // If we can't query, assume it might exist and let systemctl surface the error
+    return true;
+  }
+}
+
 async function runServiceCommand(serviceName, action) {
   await runSystemctl([action, serviceName], { timeout: 10000 });
 }
@@ -699,11 +717,28 @@ async function controlLinkedService(req, res, next) {
     const linked = await isServiceLinkedToProject(projectId, serviceName);
     if (!linked) return res.status(400).json({ message: 'Service is not linked to this project' });
 
+    // Pre-flight: verify the systemd unit file exists before attempting any
+    // action that would fail with the opaque "Unit not found" error.
+    if (action === 'start' || action === 'restart') {
+      const unitExists = await checkUnitExists(serviceName);
+      if (!unitExists) {
+        return next(new AppError(
+          `Unit file for "${serviceName}" not found on this host. ` +
+          'Open the Services tab, click "Edit unit" on this service, and use ' +
+          '"Create & Register" mode to write the .service file before starting.',
+          422,
+          'UNIT_FILE_NOT_FOUND',
+          { service: serviceName, action, hint: 'Use Create & Register in the Services wizard to create the unit file first.' }
+        ));
+      }
+    }
+
     await runServiceCommand(serviceName, action);
     await createLog({ userId: req.user.id, action: `${action} project service ${serviceName} on ${project.name}` });
 
     return res.json({ message: `${serviceName} ${action} command completed` });
   } catch (error) {
+    if (error instanceof AppError) return next(error);
     return next(new AppError('Service command failed', 503, 'SERVICE_COMMAND_FAILED', {
       service: req.params.name,
       action:  req.params.action,

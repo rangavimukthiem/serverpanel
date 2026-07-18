@@ -140,6 +140,47 @@ async function refreshProjectServices(project, canManage) {
   }
 }
 
+// ── Unit-missing inline alert ─────────────────────────────────────────────────
+
+/**
+ * Injects a dismissible alert inside the service card when a start/restart
+ * is attempted but the .service unit file doesn't exist on the host.
+ * Offers a "Create unit now" button that opens the wizard pre-filled.
+ */
+function showUnitMissingAlert(cardEl, svcName, project) {
+  if (!cardEl) return;
+
+  // Remove previous alert if any
+  cardEl.querySelector('.unit-missing-alert')?.remove();
+
+  const alert = document.createElement('div');
+  alert.className = 'unit-missing-alert';
+  alert.innerHTML = `
+    <p>
+      <strong>⚠ Unit file not found</strong><br>
+      <code>${escapeHtml(svcName)}.service</code> doesn't exist on this host yet.
+      Create the unit file first, then start the service.
+    </p>
+    <div class="unit-missing-actions">
+      <button type="button" class="do-create-unit" data-svc="${escapeHtml(svcName)}">
+        ✎ Create unit now →
+      </button>
+      <button type="button" class="dismiss-alert ghost-button">Dismiss</button>
+    </div>
+  `;
+
+  // "Create unit now" → open wizard pre-filled in Create mode
+  alert.querySelector('.do-create-unit').addEventListener('click', () => {
+    alert.remove();
+    openWizard(project, { prefillName: svcName, mode: 'create' });
+  });
+
+  alert.querySelector('.dismiss-alert').addEventListener('click', () => alert.remove());
+
+  cardEl.appendChild(alert);
+  alert.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // ── Service card event delegation ─────────────────────────────────────────────
 
 function bindServiceCardActions(project, canManage) {
@@ -169,7 +210,12 @@ async function handleCardClick(e, project, canManage) {
       await api(`/api/projects/${project.id}/services/${encodeURIComponent(svcName)}/${action}`, { method: 'POST' });
       await refreshProjectServices(project, canManage);
     } catch (err) {
-      reportGlobalError(err, `${action} ${svcName}`);
+      // Special case: unit file not found → show inline fix prompt instead of generic error
+      if (err?.code === 'UNIT_FILE_NOT_FOUND' || err?.status === 422) {
+        showUnitMissingAlert(actionBtn.closest('article'), svcName, project);
+      } else {
+        reportGlobalError(err, `${action} ${svcName}`);
+      }
     } finally {
       actionBtn.disabled = false;
     }

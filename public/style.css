@@ -1127,6 +1127,65 @@ label {
   font-size: 13px;
 }
 
+/* ─── Unit-missing inline alert ─────────────────────────────────────────────── */
+
+.unit-missing-alert {
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 8px;
+  font-size: 13px;
+  margin-top: 10px;
+  padding: 12px 14px;
+}
+
+.unit-missing-alert p {
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+.unit-missing-alert strong {
+  color: #fbbf24;
+}
+
+.unit-missing-alert code {
+  background: rgba(251, 191, 36, 0.12);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+}
+
+.unit-missing-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.unit-missing-actions .do-create-unit {
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 6px;
+  color: #fbbf24;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 30px;
+  padding: 0 12px;
+  transition: background 140ms, border-color 140ms;
+}
+
+.unit-missing-actions .do-create-unit:hover {
+  background: rgba(251, 191, 36, 0.25);
+  border-color: rgba(251, 191, 36, 0.7);
+}
+
+.unit-missing-actions .dismiss-alert {
+  font-size: 12px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
 /* ─── Projects split layout ────────────────────────────────────────────────── */
 #projects.panel-section {
   padding: 0;
