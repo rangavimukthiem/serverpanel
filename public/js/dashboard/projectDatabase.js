@@ -315,11 +315,33 @@ async function submitExcelImport(project, form, mode) {
       await refreshTablesList(project);
     }
   } catch (err) {
-    renderImportMessage('error', err.message);
+    renderImportMessage('error', formatImportError(err));
     reportGlobalError(err, mode === 'preview' ? 'Excel import preview' : 'Excel import');
   } finally {
     setExcelImportBusy(form, false);
   }
+}
+
+function formatImportError(error) {
+  const details = error?.details;
+  if (!details || typeof details !== 'object') return error.message;
+
+  if (Array.isArray(details.invalidRows) && details.invalidRows.length) {
+    const examples = details.invalidRows
+      .slice(0, 8)
+      .map((row) => `row ${row.sourceRow}: missing ${row.missingColumns.join(', ')}`)
+      .join('; ');
+    const more = Number(details.totalInvalidRows || 0) > details.invalidRows.length
+      ? `; plus ${Number(details.totalInvalidRows) - details.invalidRows.length} more`
+      : '';
+    return `${error.message} ${examples}${more}`;
+  }
+
+  if (Array.isArray(details.unmappedRequiredColumns) && details.unmappedRequiredColumns.length) {
+    return `${error.message} Missing mapping for: ${details.unmappedRequiredColumns.join(', ')}`;
+  }
+
+  return error.message;
 }
 
 function previewMatchesCurrentSelection(preview, file, tableName, headerRow, sheetName) {

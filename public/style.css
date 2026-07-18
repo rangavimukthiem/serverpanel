@@ -965,6 +965,7 @@ label {
   background: var(--panel-deep);
   display: grid;
   align-content: start;
+  min-width: 0;
   overflow-y: auto;
 }
 
@@ -1027,6 +1028,7 @@ label {
   display: grid;
   align-content: start;
   gap: 16px;
+  min-width: 0;
   padding: 20px 24px;
 }
 
@@ -1074,6 +1076,7 @@ label {
   border-radius: var(--radius);
   display: grid;
   gap: 14px;
+  min-width: 0;
   padding: 18px;
 }
 
@@ -1223,6 +1226,8 @@ label {
 .table-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -1855,12 +1860,19 @@ label {
 
 /* Excel import */
 .excel-import-form {
-  grid-template-columns: 1.1fr 1.5fr 1fr 96px auto auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+
+.excel-import-form>* {
+  min-width: 0;
+  width: 100%;
 }
 
 .excel-import-output {
   display: grid;
   gap: 12px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .excel-import-output:empty {
@@ -1873,6 +1885,8 @@ label {
   color: var(--text);
   display: grid;
   gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 12px 14px;
 }
 
@@ -1927,6 +1941,7 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .import-map-pill {
@@ -1938,6 +1953,7 @@ label {
   gap: 8px;
   max-width: 100%;
   min-height: 34px;
+  min-width: 0;
   padding: 5px 10px;
 }
 
@@ -1965,12 +1981,18 @@ label {
   gap: 4px;
   font-size: 12px;
   margin: 0;
+  overflow-wrap: anywhere;
   padding: 10px 14px 10px 28px;
 }
 
 .import-sample-table {
+  max-width: 100%;
   max-height: 240px;
   overflow: auto;
+}
+
+.import-sample-table .data-table {
+  width: max-content;
 }
 
 @media (max-width: 960px) {

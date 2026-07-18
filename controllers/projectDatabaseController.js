@@ -232,6 +232,15 @@ function isEmptyCellValue(value) {
   return value === null || value === undefined || (typeof value === 'string' && value.trim() === '');
 }
 
+function isRequiredColumn(column) {
+  return Boolean(
+    column &&
+    column.importable &&
+    !column.nullable &&
+    column.defaultValue === null
+  );
+}
+
 async function readWorkbook(file) {
   try {
     const sheets = await readExcelFile(file.buffer);
@@ -413,6 +422,21 @@ function validateMapping(rawMapping, headers, targetColumns) {
   return mapping;
 }
 
+function getUnmappedRequiredColumns(mapping, targetColumns) {
+  const mappedColumns = new Set(mapping.map((item) => item.column));
+  return targetColumns
+    .filter(isRequiredColumn)
+    .filter((column) => !mappedColumns.has(column.name))
+    .map((column) => column.name);
+}
+
+function getRequiredMappingItems(mapping, targetColumns) {
+  const columnsByName = new Map(targetColumns.map((column) => [column.name, column]));
+  return mapping
+    .map((item, index) => ({ ...item, valueIndex: index, columnMeta: columnsByName.get(item.column) }))
+    .filter((item) => isRequiredColumn(item.columnMeta));
+}
+
 function collectSampleRows(worksheet, headerRowNumber, mapping) {
   const rows = [];
   for (let rowIndex = headerRowNumber; rowIndex < worksheet.rows.length; rowIndex += 1) {
@@ -433,9 +457,11 @@ function collectSampleRows(worksheet, headerRowNumber, mapping) {
   return rows;
 }
 
-function collectImportRows(worksheet, headerRowNumber, mapping) {
+function collectImportRows(worksheet, headerRowNumber, mapping, targetColumns) {
   const rows = [];
   let skippedRows = 0;
+  const invalidRows = [];
+  const requiredItems = getRequiredMappingItems(mapping, targetColumns);
 
   for (let rowIndex = headerRowNumber; rowIndex < worksheet.rows.length; rowIndex += 1) {
     const row = worksheet.rows[rowIndex] || [];
@@ -443,6 +469,14 @@ function collectImportRows(worksheet, headerRowNumber, mapping) {
 
     if (values.every(isEmptyCellValue)) {
       skippedRows += 1;
+      continue;
+    }
+
+    const missingColumns = requiredItems
+      .filter((item) => isEmptyCellValue(values[item.valueIndex]))
+      .map((item) => item.column);
+    if (missingColumns.length) {
+      invalidRows.push({ sourceRow: rowIndex + 1, missingColumns });
       continue;
     }
 
@@ -455,6 +489,24 @@ function collectImportRows(worksheet, headerRowNumber, mapping) {
         { maxRows: EXCEL_IMPORT_MAX_ROWS }
       );
     }
+  }
+
+  if (invalidRows.length) {
+    const examples = invalidRows
+      .slice(0, 8)
+      .map((row) => `row ${row.sourceRow}: ${row.missingColumns.join(', ')}`)
+      .join('; ');
+    const suffix = invalidRows.length > 8 ? `; plus ${invalidRows.length - 8} more row(s)` : '';
+    throw new AppError(
+      `Excel import found ${invalidRows.length} row(s) missing required values (${examples}${suffix}).`,
+      400,
+      'DB_IMPORT_REQUIRED_VALUE_MISSING',
+      {
+        invalidRows: invalidRows.slice(0, 20),
+        totalInvalidRows: invalidRows.length,
+        requiredColumns: requiredItems.map((item) => item.column)
+      }
+    );
   }
 
   return { rows, skippedRows };
@@ -801,11 +853,13 @@ async function importSpreadsheet(req, res, next) {
     const unmappedHeaders = headers
       .filter((header) => !mappedHeaderIndexes.has(header.index))
       .map((header) => header.name);
+    const unmappedRequiredColumns = getUnmappedRequiredColumns(mapping, targetColumns);
     const ignoredColumns = targetColumns
       .filter((column) => !column.importable)
       .map((column) => column.name);
     const warnings = [
       ...headerWarnings,
+      ...unmappedRequiredColumns.map((column) => `Required table column "${column}" is not mapped from Excel.`),
       ...ignoredColumns.map((column) => `Column "${column}" is generated or auto-increment and was not importable.`)
     ];
 
@@ -820,6 +874,7 @@ async function importSpreadsheet(req, res, next) {
       maxRows: EXCEL_IMPORT_MAX_ROWS,
       targetColumns,
       suggestedMapping: mapping,
+      unmappedRequiredColumns,
       unmappedHeaders,
       sampleRows: collectSampleRows(worksheet, headerRowNumber, mapping),
       warnings
@@ -837,7 +892,16 @@ async function importSpreadsheet(req, res, next) {
       );
     }
 
-    const { rows, skippedRows } = collectImportRows(worksheet, headerRowNumber, mapping);
+    if (unmappedRequiredColumns.length) {
+      throw new AppError(
+        `Required table column(s) are not mapped: ${unmappedRequiredColumns.join(', ')}.`,
+        400,
+        'DB_IMPORT_REQUIRED_COLUMN_UNMAPPED',
+        { unmappedRequiredColumns }
+      );
+    }
+
+    const { rows, skippedRows } = collectImportRows(worksheet, headerRowNumber, mapping, targetColumns);
     if (!rows.length) {
       throw new AppError('No data rows were found below the header row.', 400, 'DB_IMPORT_NO_ROWS');
     }
