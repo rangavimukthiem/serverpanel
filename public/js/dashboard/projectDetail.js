@@ -99,55 +99,43 @@ function bindProjectManagement(project) {
 
   const statusMeta = document.getElementById('projectManagementStatus');
   const message = document.getElementById('projectManagementMessage');
-  const toggleBtn = document.getElementById('toggleProjectStatus');
+  const disableBtn = document.getElementById('disableProjectStatus') || document.getElementById('toggleProjectStatus');
+  const enableBtn = document.getElementById('enableProjectStatus');
   const deleteBtn = document.getElementById('deleteProject');
   const isInactive = project.status === 'inactive';
 
   if (statusMeta) statusMeta.textContent = `Current status: ${project.status}`;
   if (message) message.textContent = '';
 
-  if (toggleBtn) {
-    const fresh = toggleBtn.cloneNode(true);
-    toggleBtn.replaceWith(fresh);
-    fresh.textContent = isInactive ? 'Enable Project' : 'Disable Project';
-    fresh.className = isInactive ? '' : 'warn-button';
+  bindProjectStatusButton({
+    button: disableBtn,
+    project,
+    nextStatus: 'inactive',
+    disabled: isInactive,
+    message,
+    confirmOptions: {
+      eyebrow: 'Project management',
+      title: 'Disable project?',
+      message: `Disable project "${project.name}"? The project will remain on disk, but it will be marked inactive in EKAFY.`,
+      confirmLabel: 'Disable Project',
+      variant: 'warning'
+    }
+  });
 
-    fresh.addEventListener('click', async () => {
-      const nextStatus = isInactive ? 'active' : 'inactive';
-      const progressText = nextStatus === 'inactive' ? 'Disabling project...' : 'Enabling project...';
-
-      if (nextStatus === 'inactive') {
-        const confirmed = await confirmDialog({
-          eyebrow: 'Project management',
-          title: 'Disable project?',
-          message: `Disable project "${project.name}"? The project will remain on disk, but it will be marked inactive in EKAFY.`,
-          confirmLabel: 'Disable Project',
-          variant: 'warning'
-        });
-        if (!confirmed) return;
-      }
-
-      fresh.disabled = true;
-      if (message) message.textContent = progressText;
-
-      try {
-        const data = await api(`/api/projects/${project.id}/status`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status: nextStatus })
-        });
-
-        dashboardState.selectedProject = data.project;
-        await loadProjects();
-        renderOverview(data.project);
-        showGlobalMessage(`Project "${data.project.name}" ${nextStatus === 'inactive' ? 'disabled' : 'enabled'}.`, 'success');
-      } catch (error) {
-        if (message) message.textContent = error.message;
-        reportGlobalError(error, 'Changing project status');
-      } finally {
-        fresh.disabled = false;
-      }
-    });
-  }
+  bindProjectStatusButton({
+    button: enableBtn,
+    project,
+    nextStatus: 'active',
+    disabled: !isInactive,
+    message,
+    confirmOptions: {
+      eyebrow: 'Project management',
+      title: 'Enable project?',
+      message: `Enable project "${project.name}" and mark it active again in EKAFY?`,
+      confirmLabel: 'Enable Project',
+      variant: 'success'
+    }
+  });
 
   if (deleteBtn) {
     const fresh = deleteBtn.cloneNode(true);
@@ -182,6 +170,42 @@ function bindProjectManagement(project) {
       }
     });
   }
+}
+
+function bindProjectStatusButton({ button, project, nextStatus, disabled, message, confirmOptions }) {
+  if (!button) return;
+
+  const fresh = button.cloneNode(true);
+  button.replaceWith(fresh);
+  fresh.disabled = disabled;
+  fresh.setAttribute('aria-disabled', String(disabled));
+
+  fresh.addEventListener('click', async () => {
+    const confirmed = await confirmDialog(confirmOptions);
+    if (!confirmed) return;
+
+    fresh.disabled = true;
+    if (message) {
+      message.textContent = nextStatus === 'inactive' ? 'Disabling project...' : 'Enabling project...';
+    }
+
+    try {
+      const data = await api(`/api/projects/${project.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus })
+      });
+
+      dashboardState.selectedProject = data.project;
+      await loadProjects();
+      renderOverview(data.project);
+      showGlobalMessage(`Project "${data.project.name}" ${nextStatus === 'inactive' ? 'disabled' : 'enabled'}.`, 'success');
+    } catch (error) {
+      if (message) message.textContent = error.message;
+      reportGlobalError(error, 'Changing project status');
+    } finally {
+      fresh.disabled = false;
+    }
+  });
 }
 
 async function loadEnvKeys(project) {

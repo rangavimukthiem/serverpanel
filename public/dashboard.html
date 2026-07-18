@@ -174,7 +174,8 @@
                     </div>
                   </div>
                   <div class="project-management-actions">
-                    <button id="toggleProjectStatus" class="warn-button" type="button">Disable Project</button>
+                    <button id="disableProjectStatus" class="warn-button" type="button">Disable Project</button>
+                    <button id="enableProjectStatus" class="success-button" type="button">Enable Project</button>
                     <button id="deleteProject" class="danger-button" type="button">Remove Project</button>
                   </div>
                   <p id="projectManagementMessage" class="message" role="status"></p>
@@ -429,7 +430,7 @@
             </div>
             <div class="wizard-form-grid">
               <input name="name" type="text" placeholder="Project name" required minlength="2">
-              <input name="slug" type="text" placeholder="project-slug" required pattern="[a-z0-9][a-z0-9-]{1,78}[a-z0-9]">
+              <input name="slug" type="text" placeholder="project-slug" required pattern="[a-z0-9][a-z0-9\-]{1,78}[a-z0-9]">
               <input name="path" type="text" placeholder="/srv/my-project" required>
             </div>
           </div>

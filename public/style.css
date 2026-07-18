@@ -409,6 +409,15 @@ button:disabled {
   background: #f59e0b;
 }
 
+.success-button {
+  background: var(--success);
+  color: #052e20;
+}
+
+.success-button:hover {
+  background: #10b981;
+}
+
 /* ─── Inputs ───────────────────────────────────────────────────────────────── */
 input,
 select,

@@ -71,7 +71,11 @@ export function confirmDialog({
   messageEl.textContent = message;
   cancelBtn.textContent = cancelLabel;
   acceptBtn.textContent = confirmLabel;
-  acceptBtn.className = variant === 'danger' ? 'danger-button' : variant === 'warning' ? 'warn-button' : '';
+  acceptBtn.className =
+    variant === 'danger' ? 'danger-button' :
+    variant === 'warning' ? 'warn-button' :
+    variant === 'success' ? 'success-button' :
+    '';
 
   root.hidden = false;
   document.body.classList.add('has-confirm-dialog');
