@@ -1,662 +1,735 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>EKAFY Dashboard</title>
-    <meta name="description" content="EKAFY VPS control panel — manage projects, services, databases, and deployments.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
-    <link rel="stylesheet" href="/style.css">
-  </head>
-  <body>
-    <!-- ── Global message bar ───────────────────────────────────────────── -->
-    <div id="globalMessageBar" class="global-message-bar" role="status" aria-live="polite" hidden>
-      <span class="global-message-text"></span>
-      <button type="button" class="global-message-close" aria-label="Dismiss message">&times;</button>
-    </div>
 
-    <div class="app-shell">
-      <!-- ── Sidebar ──────────────────────────────────────────────────── -->
-      <aside class="sidebar">
-        <div class="brand-row">
-          <div class="brand-mark">E</div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EKAFY Dashboard</title>
+  <meta name="description" content="EKAFY VPS control panel — manage projects, services, databases, and deployments.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+  <!-- ── Global message bar ───────────────────────────────────────────── -->
+  <div id="globalMessageBar" class="global-message-bar" role="status" aria-live="polite" hidden>
+    <span class="global-message-text"></span>
+    <button type="button" class="global-message-close" aria-label="Dismiss message">&times;</button>
+  </div>
+
+  <div class="app-shell">
+    <!-- ── Sidebar ──────────────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand-mark">E</div>
+        <div>
+          <h1>EKAFY</h1>
+          <p id="userRole">Control panel</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <a class="nav-link" href="#dashboard" data-dashboard-tab="dashboard">
+          <span class="nav-icon">◈</span> Dashboard
+        </a>
+        <a class="nav-link" href="#services" data-dashboard-tab="services">
+          <span class="nav-icon">⬡</span> Services
+        </a>
+        <a class="nav-link" href="#projects" data-dashboard-tab="projects">
+          <span class="nav-icon">◧</span> Projects
+        </a>
+        <a class="nav-link admin-only" href="#access" data-dashboard-tab="access">
+          <span class="nav-icon">◎</span> Users
+        </a>
+      </nav>
+
+      <button id="logoutButton" class="ghost-button sidebar-logout" type="button">Sign out</button>
+    </aside>
+
+    <!-- ── Main content ─────────────────────────────────────────────── -->
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="topbarEyebrow">Server overview</p>
+          <h2 id="topbarTitle">Dashboard</h2>
+        </div>
+        <div class="topbar-right">
+          <div class="refresh-pill" id="refreshPill">Auto-refresh 5s</div>
+        </div>
+      </header>
+
+      <!-- ── Dashboard tab ──────────────────────────────────────────── -->
+      <section id="dashboard" class="panel-section" data-dashboard-screen="dashboard">
+        <section class="metric-grid" aria-label="System metrics">
+          <article class="metric-card">
+            <span class="metric-label">CPU</span>
+            <strong id="cpuValue">--%</strong>
+            <div class="meter">
+              <div id="cpuMeter"></div>
+            </div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">RAM</span>
+            <strong id="ramValue">--%</strong>
+            <div class="meter">
+              <div id="ramMeter"></div>
+            </div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Disk</span>
+            <strong id="diskValue">--%</strong>
+            <div class="meter">
+              <div id="diskMeter"></div>
+            </div>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Uptime</span>
+            <strong id="uptimeValue">--</strong>
+            <small>Host runtime</small>
+          </article>
+        </section>
+
+        <section class="dashboard-detail-grid" aria-label="Server information">
+          <article class="dashboard-info-card">
+            <header>
+              <div>
+                <p class="eyebrow">Host</p>
+                <h3>Server Details</h3>
+              </div>
+            </header>
+            <dl class="dashboard-detail-list">
+              <div>
+                <dt>Server IP</dt>
+                <dd id="serverIpValue">--</dd>
+              </div>
+              <div>
+                <dt>Hostname</dt>
+                <dd id="serverHostValue">--</dd>
+              </div>
+              <div>
+                <dt>Panel host</dt>
+                <dd id="panelHostValue">--</dd>
+              </div>
+              <div>
+                <dt>OS</dt>
+                <dd id="serverOsValue">--</dd>
+              </div>
+              <div>
+                <dt>Node</dt>
+                <dd id="nodeVersionValue">--</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article class="dashboard-info-card">
+            <header>
+              <div>
+                <p class="eyebrow">Deployments</p>
+                <h3>Project Summary</h3>
+              </div>
+            </header>
+            <dl class="dashboard-detail-list">
+              <div>
+                <dt>Total projects</dt>
+                <dd id="projectCountValue">--</dd>
+              </div>
+              <div>
+                <dt>Active</dt>
+                <dd id="activeProjectsValue">--</dd>
+              </div>
+              <div>
+                <dt>Inactive</dt>
+                <dd id="inactiveProjectsValue">--</dd>
+              </div>
+              <div>
+                <dt>Provisioned</dt>
+                <dd id="provisionedProjectsValue">--</dd>
+              </div>
+              <div>
+                <dt>Types</dt>
+                <dd id="projectKindValue">--</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article class="dashboard-info-card">
+            <header>
+              <div>
+                <p class="eyebrow">Runtime</p>
+                <h3>Capacity</h3>
+              </div>
+            </header>
+            <dl class="dashboard-detail-list">
+              <div>
+                <dt>Server time</dt>
+                <dd id="serverTimeValue">--</dd>
+              </div>
+              <div>
+                <dt>Timezone</dt>
+                <dd id="timezoneValue">--</dd>
+              </div>
+              <div>
+                <dt>CPU</dt>
+                <dd id="cpuDetailValue">--</dd>
+              </div>
+              <div>
+                <dt>Memory</dt>
+                <dd id="memoryDetailValue">--</dd>
+              </div>
+              <div>
+                <dt>Disk</dt>
+                <dd id="diskDetailValue">--</dd>
+              </div>
+              <div>
+                <dt>Load avg</dt>
+                <dd id="loadAverageValue">--</dd>
+              </div>
+            </dl>
+          </article>
+        </section>
+      </section>
+
+      <!-- ── Services tab ───────────────────────────────────────────── -->
+      <section id="services" class="panel-section" data-dashboard-screen="services" hidden>
+        <div class="section-heading">
           <div>
-            <h1>EKAFY</h1>
-            <p id="userRole">Control panel</p>
+            <p class="eyebrow">Systemd units</p>
+            <h3>Services</h3>
           </div>
+          <button id="refreshStatusButton" class="ghost-button" type="button">↻ Refresh</button>
         </div>
 
-        <nav class="sidebar-nav" aria-label="Main navigation">
-          <a class="nav-link" href="#dashboard" data-dashboard-tab="dashboard">
-            <span class="nav-icon">◈</span> Dashboard
-          </a>
-          <a class="nav-link" href="#services" data-dashboard-tab="services">
-            <span class="nav-icon">⬡</span> Services
-          </a>
-          <a class="nav-link" href="#projects" data-dashboard-tab="projects">
-            <span class="nav-icon">◧</span> Projects
-          </a>
-          <a class="nav-link admin-only" href="#access" data-dashboard-tab="access">
-            <span class="nav-icon">◎</span> Users
-          </a>
-        </nav>
-
-        <button id="logoutButton" class="ghost-button sidebar-logout" type="button">Sign out</button>
-      </aside>
-
-      <!-- ── Main content ─────────────────────────────────────────────── -->
-      <main class="content">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow" id="topbarEyebrow">Server overview</p>
-            <h2 id="topbarTitle">Dashboard</h2>
-          </div>
-          <div class="topbar-right">
-            <div class="refresh-pill" id="refreshPill">Auto-refresh 5s</div>
-          </div>
-        </header>
-
-        <!-- ── Dashboard tab ──────────────────────────────────────────── -->
-        <section id="dashboard" class="panel-section" data-dashboard-screen="dashboard">
-          <section class="metric-grid" aria-label="System metrics">
-            <article class="metric-card">
-              <span class="metric-label">CPU</span>
-              <strong id="cpuValue">--%</strong>
-              <div class="meter"><div id="cpuMeter"></div></div>
-            </article>
-            <article class="metric-card">
-              <span class="metric-label">RAM</span>
-              <strong id="ramValue">--%</strong>
-              <div class="meter"><div id="ramMeter"></div></div>
-            </article>
-            <article class="metric-card">
-              <span class="metric-label">Disk</span>
-              <strong id="diskValue">--%</strong>
-              <div class="meter"><div id="diskMeter"></div></div>
-            </article>
-            <article class="metric-card">
-              <span class="metric-label">Uptime</span>
-              <strong id="uptimeValue">--</strong>
-              <small>Host runtime</small>
-            </article>
+        <div class="services-stack">
+          <section class="services-section">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Host services</p>
+                <h4>Global services</h4>
+              </div>
+            </div>
+            <div id="servicesGrid" class="service-grid"></div>
           </section>
 
-          <section class="dashboard-detail-grid" aria-label="Server information">
-            <article class="dashboard-info-card">
-              <header>
-                <div>
-                  <p class="eyebrow">Host</p>
-                  <h3>Server Details</h3>
-                </div>
-              </header>
-              <dl class="dashboard-detail-list">
-                <div><dt>Server IP</dt><dd id="serverIpValue">--</dd></div>
-                <div><dt>Hostname</dt><dd id="serverHostValue">--</dd></div>
-                <div><dt>Panel host</dt><dd id="panelHostValue">--</dd></div>
-                <div><dt>OS</dt><dd id="serverOsValue">--</dd></div>
-                <div><dt>Node</dt><dd id="nodeVersionValue">--</dd></div>
-              </dl>
-            </article>
-
-            <article class="dashboard-info-card">
-              <header>
-                <div>
-                  <p class="eyebrow">Deployments</p>
-                  <h3>Project Summary</h3>
-                </div>
-              </header>
-              <dl class="dashboard-detail-list">
-                <div><dt>Total projects</dt><dd id="projectCountValue">--</dd></div>
-                <div><dt>Active</dt><dd id="activeProjectsValue">--</dd></div>
-                <div><dt>Inactive</dt><dd id="inactiveProjectsValue">--</dd></div>
-                <div><dt>Provisioned</dt><dd id="provisionedProjectsValue">--</dd></div>
-                <div><dt>Types</dt><dd id="projectKindValue">--</dd></div>
-              </dl>
-            </article>
-
-            <article class="dashboard-info-card">
-              <header>
-                <div>
-                  <p class="eyebrow">Runtime</p>
-                  <h3>Capacity</h3>
-                </div>
-              </header>
-              <dl class="dashboard-detail-list">
-                <div><dt>Server time</dt><dd id="serverTimeValue">--</dd></div>
-                <div><dt>Timezone</dt><dd id="timezoneValue">--</dd></div>
-                <div><dt>CPU</dt><dd id="cpuDetailValue">--</dd></div>
-                <div><dt>Memory</dt><dd id="memoryDetailValue">--</dd></div>
-                <div><dt>Disk</dt><dd id="diskDetailValue">--</dd></div>
-                <div><dt>Load avg</dt><dd id="loadAverageValue">--</dd></div>
-              </dl>
-            </article>
+          <section class="services-section">
+            <div class="section-heading compact">
+              <div>
+                <p class="eyebrow">Project units</p>
+                <h4>EKAFY project services</h4>
+              </div>
+            </div>
+            <div id="ekafyServicesGrid" class="service-grid service-grid-wide"></div>
           </section>
-        </section>
+        </div>
+        <p id="serviceMessage" class="message" role="status"></p>
+      </section>
 
-        <!-- ── Services tab ───────────────────────────────────────────── -->
-        <section id="services" class="panel-section" data-dashboard-screen="services" hidden>
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Systemd units</p>
-              <h3>Services</h3>
+      <!-- ── Projects tab ───────────────────────────────────────────── -->
+      <section id="projects" class="panel-section" data-dashboard-screen="projects" hidden>
+        <div class="projects-layout">
+          <!-- Left: project list -->
+          <div class="projects-list-pane">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Deployments</p>
+                <h3>Projects</h3>
+              </div>
+              <button id="newProjectButton" class="admin-only" type="button">+ New</button>
             </div>
-            <button id="refreshStatusButton" class="ghost-button" type="button">↻ Refresh</button>
+            <div id="projectsList" class="projects-list"></div>
           </div>
 
-          <div class="services-stack">
-            <section class="services-section">
-              <div class="section-heading compact">
-                <div>
-                  <p class="eyebrow">Host services</p>
-                  <h4>Global services</h4>
-                </div>
+          <!-- Right: project detail drawer -->
+          <div id="projectDetail" class="project-detail" hidden>
+            <div class="detail-header">
+              <div>
+                <p class="eyebrow" id="detailProjectSlug"></p>
+                <h3 id="detailProjectName">Project</h3>
               </div>
-              <div id="servicesGrid" class="service-grid"></div>
-            </section>
-
-            <section class="services-section">
-              <div class="section-heading compact">
-                <div>
-                  <p class="eyebrow">Project units</p>
-                  <h4>EKAFY project services</h4>
-                </div>
-              </div>
-              <div id="ekafyServicesGrid" class="service-grid service-grid-wide"></div>
-            </section>
-          </div>
-          <p id="serviceMessage" class="message" role="status"></p>
-        </section>
-
-        <!-- ── Projects tab ───────────────────────────────────────────── -->
-        <section id="projects" class="panel-section" data-dashboard-screen="projects" hidden>
-          <div class="projects-layout">
-            <!-- Left: project list -->
-            <div class="projects-list-pane">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">Deployments</p>
-                  <h3>Projects</h3>
-                </div>
-                <button id="newProjectButton" class="admin-only" type="button">+ New</button>
-              </div>
-              <div id="projectsList" class="projects-list"></div>
+              <button id="closeDetail" class="ghost-button" type="button">✕</button>
             </div>
 
-            <!-- Right: project detail drawer -->
-            <div id="projectDetail" class="project-detail" hidden>
-              <div class="detail-header">
-                <div>
-                  <p class="eyebrow" id="detailProjectSlug"></p>
-                  <h3 id="detailProjectName">Project</h3>
-                </div>
-                <button id="closeDetail" class="ghost-button" type="button">✕</button>
+            <nav class="detail-tab-list" aria-label="Project sections">
+              <button class="detail-tab" data-detail-tab="overview" id="dtab-overview">Overview</button>
+              <button class="detail-tab" data-detail-tab="setup" id="dtab-setup">Setup</button>
+              <button class="detail-tab" data-detail-tab="database" id="dtab-database">Database</button>
+              <button class="detail-tab" data-detail-tab="endpoints" id="dtab-endpoints">Endpoints</button>
+              <button class="detail-tab" data-detail-tab="git" id="dtab-git">Git</button>
+              <button class="detail-tab" data-detail-tab="services" id="dtab-services">Services</button>
+            </nav>
+
+            <!-- Overview panel -->
+            <div id="detailOverview" class="detail-panel">
+              <div class="overview-grid">
+                <div class="info-card"><span class="info-label">Status</span><strong id="ovStatus">—</strong></div>
+                <div class="info-card"><span class="info-label">Domain</span><strong id="ovDomain">—</strong></div>
+                <div class="info-card"><span class="info-label">Port</span><strong id="ovPort">—</strong></div>
+                <div class="info-card"><span class="info-label">Type</span><strong id="ovKind">—</strong></div>
+                <div class="info-card"><span class="info-label">Runtime</span><strong id="ovRuntime">—</strong></div>
+                <div class="info-card"><span class="info-label">Path</span><code id="ovPath">—</code></div>
+                <div class="info-card"><span class="info-label">Branch</span><strong id="ovBranch">—</strong></div>
               </div>
-
-              <nav class="detail-tab-list" aria-label="Project sections">
-                <button class="detail-tab" data-detail-tab="overview"   id="dtab-overview">Overview</button>
-                <button class="detail-tab" data-detail-tab="setup"      id="dtab-setup">Setup</button>
-                <button class="detail-tab" data-detail-tab="database"   id="dtab-database">Database</button>
-                <button class="detail-tab" data-detail-tab="endpoints"  id="dtab-endpoints">Endpoints</button>
-                <button class="detail-tab" data-detail-tab="git"        id="dtab-git">Git</button>
-                <button class="detail-tab" data-detail-tab="services"   id="dtab-services">Services</button>
-              </nav>
-
-              <!-- Overview panel -->
-              <div id="detailOverview" class="detail-panel">
-                <div class="overview-grid">
-                  <div class="info-card"><span class="info-label">Status</span><strong id="ovStatus">—</strong></div>
-                  <div class="info-card"><span class="info-label">Domain</span><strong id="ovDomain">—</strong></div>
-                  <div class="info-card"><span class="info-label">Port</span><strong id="ovPort">—</strong></div>
-                  <div class="info-card"><span class="info-label">Type</span><strong id="ovKind">—</strong></div>
-                  <div class="info-card"><span class="info-label">Runtime</span><strong id="ovRuntime">—</strong></div>
-                  <div class="info-card"><span class="info-label">Path</span><code id="ovPath">—</code></div>
-                  <div class="info-card"><span class="info-label">Branch</span><strong id="ovBranch">—</strong></div>
-                </div>
-                <div class="wizard-card">
-                  <h4>Members</h4>
-                  <div id="ovMembers"></div>
-                </div>
-                <div class="wizard-card admin-only" id="projectManagementSection">
-                  <div class="section-heading">
-                    <div>
-                      <h4>Project Management</h4>
-                      <p class="eyebrow" id="projectManagementStatus">Current status</p>
-                    </div>
-                  </div>
-                  <div class="project-management-actions">
-                    <button id="disableProjectStatus" class="warn-button" type="button">Disable Project</button>
-                    <button id="enableProjectStatus" class="success-button" type="button">Enable Project</button>
-                    <button id="deleteProject" class="danger-button" type="button">Remove Project</button>
-                  </div>
-                  <p id="projectManagementMessage" class="message" role="status"></p>
-                </div>
-                <div class="wizard-card admin-only" id="envSection">
-                  <div class="section-heading">
-                    <h4>Environment Variables</h4>
-                    <button id="toggleEnvForm" class="ghost-button" type="button">+ Add</button>
-                  </div>
-                  <form id="envForm" class="inline-form env-form" hidden>
-                    <input id="envKey"   type="text"     placeholder="KEY_NAME">
-                    <input id="envValue" type="password" placeholder="value">
-                    <button type="submit">Set</button>
-                    <button type="button" id="cancelEnvForm" class="ghost-button">Cancel</button>
-                  </form>
-                  <div id="envKeysList"></div>
-                </div>
+              <div class="wizard-card">
+                <h4>Members</h4>
+                <div id="ovMembers"></div>
               </div>
-
-              <!-- Setup panel -->
-              <div id="detailSetup" class="detail-panel" hidden>
-                <div class="setup-steps">
-                  <div class="setup-step">
-                    <div class="step-header">
-                      <span class="step-num">1</span>
-                      <div>
-                        <h4>Folder Structure</h4>
-                        <p>Creates <code>public/ logs/ releases/ shared/ config/</code> and initial <code>.env</code></p>
-                      </div>
-                      <span class="status-badge" id="scaffoldBadge">—</span>
-                    </div>
-                    <button id="runScaffold" type="button">Run Scaffold</button>
-                  </div>
-
-                  <div class="setup-step">
-                    <div class="step-header">
-                      <span class="step-num">2</span>
-                      <div>
-                        <h4>Nginx Configuration</h4>
-                        <p>Generate server block, symlink to sites-enabled, reload nginx.</p>
-                      </div>
-                      <span class="status-badge" id="nginxBadge">—</span>
-                    </div>
-                    <div class="inline-form setup-inline">
-                      <input id="setupDomain" type="text"   placeholder="app.example.com">
-                      <select id="setupRuntime">
-                        <option value="static-site">Static HTML/CSS/JS</option>
-                        <option value="static-api">Static site + API</option>
-                        <option value="node-app">Node.js app/API</option>
-                        <option value="python-api">Python API/app</option>
-                        <option value="php-site">PHP site</option>
-                        <option value="wordpress-site">WordPress/WooCommerce</option>
-                      </select>
-                      <input id="setupPort" type="number" placeholder="App/API port" min="1024" max="65535">
-                      <input id="setupPhpSocket" type="text" placeholder="/run/php/php8.1-fpm.sock">
-                    </div>
-                    <button id="runNginx" type="button">Generate Nginx Config</button>
-                  </div>
-
-                  <div class="setup-step">
-                    <div class="step-header">
-                      <span class="step-num">3</span>
-                      <div>
-                        <h4>SSL Certificate</h4>
-                        <p>Certbot (Let's Encrypt) for trusted origin SSL.</p>
-                      </div>
-                      <span class="status-badge" id="sslBadge">—</span>
-                    </div>
-                    <button id="runSsl" type="button">Provision SSL</button>
-                  </div>
-                </div>
-                <div class="terminal-output" id="setupOutput"></div>
-              </div>
-
-              <!-- Database panel -->
-              <div id="detailDatabase" class="detail-panel" hidden>
-                <div class="wizard-card" id="dbProvisionSection">
-                  <div class="section-heading">
-                    <h4>Database Provisioning</h4>
-                    <span class="status-badge" id="dbBadge">—</span>
-                  </div>
-                  <div class="inline-form wizard-stack">
-                    <input id="dbName"     type="text" placeholder="Database name (e.g. myapp_db)">
-                    <input id="dbUser"     type="text" placeholder="DB username (e.g. myapp_user)">
-                    <select id="dbProvider">
-                      <option value="mariadb">MariaDB</option>
-                    </select>
-                  </div>
-                  <button id="provisionDb" type="button">Provision Database</button>
-                </div>
-
-                <div class="wizard-card">
-                  <div class="section-heading">
-                    <h4>Tables</h4>
-                    <button id="refreshTables" class="ghost-button" type="button">↻ Refresh</button>
-                  </div>
-                  <div id="tablesList" class="tables-list"></div>
-                </div>
-
-                <div class="wizard-card">
-                  <div class="section-heading">
-                    <div>
-                      <h4>Excel Import</h4>
-                      <p class="eyebrow">Feed .xlsx rows into an existing table</p>
-                    </div>
-                  </div>
-                  <form id="excelImportForm" class="inline-form excel-import-form">
-                    <select id="excelImportTable" required>
-                      <option value="">Create a table first</option>
-                    </select>
-                    <input id="excelImportFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-                    <input id="excelSheetName" type="text" placeholder="Sheet name (optional)">
-                    <input id="excelHeaderRow" type="number" min="1" max="1000" value="1" aria-label="Header row">
-                    <button id="previewExcelImport" class="ghost-button" type="button">Preview</button>
-                    <button id="runExcelImport" type="submit">Import</button>
-                  </form>
-                  <div id="excelImportOutput" class="excel-import-output"></div>
-                </div>
-
-                <div class="wizard-card">
-                  <h4>SQL Query Tool</h4>
-                  <div class="preset-row" id="sqlPresetRow"></div>
-                  <textarea id="sqlEditor" rows="7" placeholder="-- Write SQL here&#10;SELECT * FROM `your_table` LIMIT 100;"></textarea>
-                  <button id="runSql" type="button">▶ Run Query</button>
-                  <div class="terminal-output" id="sqlOutput"></div>
-                  <div class="table-panel" id="sqlResultTable" hidden></div>
-                </div>
-              </div>
-
-              <!-- Endpoints panel -->
-              <div id="detailEndpoints" class="detail-panel" hidden>
+              <div class="wizard-card admin-only" id="projectManagementSection">
                 <div class="section-heading">
                   <div>
-                    <h4>API Endpoints</h4>
-                    <p class="eyebrow">Managed endpoint registry — editable at any time</p>
-                  </div>
-                  <button id="addEndpointBtn" class="admin-only" type="button">+ Add</button>
-                </div>
-                <div id="addEndpointForm" class="endpoint-add-form admin-only" hidden>
-                  <div class="endpoint-row">
-                    <input id="newEpName"   type="text" placeholder="Endpoint name">
-                    <select id="newEpMethod">
-                      <option>GET</option><option>POST</option><option>PUT</option>
-                      <option>PATCH</option><option>DELETE</option>
-                    </select>
-                    <input id="newEpPath"   type="text" placeholder="/resource/path">
-                    <input id="newEpDesc"   type="text" placeholder="Description">
-                    <button id="saveNewEndpoint" type="button">Add</button>
-                    <button id="cancelNewEndpoint" type="button" class="ghost-button">✕</button>
+                    <h4>Project Management</h4>
+                    <p class="eyebrow" id="projectManagementStatus">Current status</p>
                   </div>
                 </div>
-                <div id="endpointsList" class="endpoints-table-wrap">
-                  <p class="message">Loading endpoints…</p>
+                <div class="project-management-actions">
+                  <button id="disableProjectStatus" class="warn-button" type="button">Disable Project</button>
+                  <button id="enableProjectStatus" class="success-button" type="button">Enable Project</button>
+                  <button id="deleteProject" class="danger-button" type="button">Remove Project</button>
                 </div>
+                <p id="projectManagementMessage" class="message" role="status"></p>
               </div>
-
-              <!-- Git panel -->
-              <div id="detailGit" class="detail-panel" hidden>
-                <div class="wizard-card">
-                  <h4>Repository</h4>
-                  <div class="inline-form wizard-stack">
-                    <input id="gitRepoUrl" type="text" placeholder="git@github.com:user/repo.git or https://…">
-                    <input id="gitBranch"  type="text" placeholder="Branch (e.g. main)" value="main">
-                  </div>
-                  <div class="git-actions">
-                    <button id="gitInit"  type="button">Init</button>
-                    <button id="gitClone" type="button">Clone</button>
-                    <button id="gitPull"  type="button">Pull</button>
-                  </div>
-                </div>
-                <div class="wizard-card">
-                  <h4>Commit &amp; Push</h4>
-                  <div class="inline-form push-form">
-                    <input id="commitMsg" type="text" placeholder="Commit message">
-                    <button id="gitPush" type="button">↑ Push</button>
-                  </div>
-                </div>
-                <div class="terminal-output" id="gitOutput"></div>
-                <div class="wizard-card">
-                  <div class="section-heading">
-                    <h4>Status &amp; Log</h4>
-                    <button id="refreshGitStatus" class="ghost-button" type="button">↻ Refresh</button>
-                  </div>
-                  <pre id="gitStatusOut" class="git-log">Loading…</pre>
-                </div>
-              </div>
-
-              <!-- Services panel -->
-              <div id="detailServices" class="detail-panel" hidden>
+              <div class="wizard-card admin-only" id="envSection">
                 <div class="section-heading">
-                  <h4>Linked Services</h4>
-                  <button id="addServiceBtn" class="admin-only" type="button">+ Add Service</button>
+                  <h4>Environment Variables</h4>
+                  <button id="toggleEnvForm" class="ghost-button" type="button">+ Add</button>
                 </div>
-
-                <!-- Smart service wizard -->
-                <div id="addServiceWizard" class="service-wizard admin-only" hidden>
-                  <div class="wizard-header">
-                    <p class="eyebrow">Service Setup</p>
-                    <h5 id="wizardTitle">New systemd service</h5>
-                  </div>
-
-                  <!-- Mode selector -->
-                  <div class="wizard-mode-selector">
-                    <label class="mode-option">
-                      <input type="radio" name="svcMode" id="modeCreate" value="create" checked>
-                      <span class="mode-card">
-                        <strong>🆕 Create &amp; Register</strong>
-                        <small>Write a new systemd unit file for this project</small>
-                      </span>
-                    </label>
-                    <label class="mode-option">
-                      <input type="radio" name="svcMode" id="modeLink" value="link">
-                      <span class="mode-card">
-                        <strong>🔗 Link Existing</strong>
-                        <small>Register a pre-installed systemd service</small>
-                      </span>
-                    </label>
-                  </div>
-
-                  <form id="addServiceForm" class="service-wizard-form">
-
-                    <!-- Service identity -->
-                    <div class="wizard-field-group">
-                      <label class="wizard-field">
-                        <span>Service name <em>(systemd unit)</em></span>
-                        <div class="input-with-hint">
-                          <input id="newSvcName" type="text" placeholder="e.g. my-app or my-app.service" autocomplete="off" required>
-                          <span class="input-hint" id="svcNameHint"></span>
-                        </div>
-                      </label>
-                      <label class="wizard-field">
-                        <span>Display label</span>
-                        <input id="newSvcLabel" type="text" placeholder="e.g. My App API">
-                      </label>
-                    </div>
-
-                    <!-- ExecStart (create mode only) -->
-                    <div id="createUnitFields">
-                      <div class="wizard-field-group">
-                        <label class="wizard-field full-width">
-                          <span>Start command <em>(ExecStart)</em></span>
-                          <div class="exec-presets-row">
-                            <button type="button" class="preset-chip" data-preset="npm start">npm start</button>
-                            <button type="button" class="preset-chip" data-preset="node server.js">node server.js</button>
-                            <button type="button" class="preset-chip" data-preset="node index.js">node index.js</button>
-                            <button type="button" class="preset-chip" data-preset="python3 app.py">python3 app.py</button>
-                            <button type="button" class="preset-chip" data-preset="python3 main.py">python3 main.py</button>
-                          </div>
-                          <input id="newSvcExec" type="text" placeholder="npm start — auto-filled from runtime">
-                        </label>
-                      </div>
-
-                      <div class="wizard-toggle-row">
-                        <label class="toggle-option">
-                          <input id="newSvcStart" type="checkbox">
-                          <span class="toggle-pill"></span>
-                          <span>Start service immediately after saving</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div class="wizard-actions">
-                      <button type="submit" id="saveServiceBtn" class="wizard-submit">Save Service</button>
-                      <button type="button" id="cancelAddService" class="ghost-button">Cancel</button>
-                    </div>
-
-                    <p id="serviceWizardMsg" class="wizard-feedback" role="status"></p>
-                  </form>
-                </div>
-
-                <div id="projectServicesList" class="service-grid"></div>
+                <form id="envForm" class="inline-form env-form" hidden>
+                  <input id="envKey" type="text" placeholder="KEY_NAME">
+                  <input id="envValue" type="password" placeholder="value">
+                  <button type="submit">Set</button>
+                  <button type="button" id="cancelEnvForm" class="ghost-button">Cancel</button>
+                </form>
+                <div id="envKeysList"></div>
               </div>
-            </div><!-- /project-detail -->
-          </div><!-- /projects-layout -->
-        </section>
-
-        <!-- ── Users tab ──────────────────────────────────────────────── -->
-        <section id="access" class="panel-section admin-only" data-dashboard-screen="access" hidden>
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Global users and project roles</p>
-              <h3>User Management</h3>
             </div>
-          </div>
 
-          <div class="dual-form-grid">
-            <div class="wizard-card">
-              <h4>Create User</h4>
-              <form id="userForm" class="form-stack-tight">
-                <input name="username" type="text"     placeholder="Username" required minlength="3">
-                <input name="password" type="password" placeholder="Password" required minlength="8">
-                <select name="role" required>
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <button type="submit">Add User</button>
-              </form>
-            </div>
-            <div class="wizard-card">
-              <h4>Assign to Project</h4>
-              <form id="memberForm" class="form-stack-tight">
-                <select name="projectId" required><option value="">Select project</option></select>
-                <select name="userId"    required><option value="">Select user</option></select>
-                <select name="role"      required>
-                  <option value="user">Project User</option>
-                  <option value="manager">Project Manager</option>
-                </select>
-                <button type="submit">Assign</button>
-              </form>
-            </div>
-          </div>
+            <!-- Setup panel -->
+            <div id="detailSetup" class="detail-panel" hidden>
+              <div class="setup-steps">
+                <div class="setup-step">
+                  <div class="step-header">
+                    <span class="step-num">1</span>
+                    <div>
+                      <h4>Folder Structure</h4>
+                      <p>Creates <code>public/ logs/ releases/ shared/ config/</code> and initial <code>.env</code></p>
+                    </div>
+                    <span class="status-badge" id="scaffoldBadge">—</span>
+                  </div>
+                  <button id="runScaffold" type="button">Run Scaffold</button>
+                </div>
 
-          <div class="section-heading users-table-heading">
-            <div>
-              <p class="eyebrow">Accounts</p>
-              <h4>Users</h4>
-            </div>
-            <input id="userSearch" class="table-search-input" type="search" placeholder="Search users">
-          </div>
-          <div id="usersTable" class="table-panel"></div>
-          <p id="accessMessage" class="message" role="status"></p>
-        </section>
-      </main>
-    </div>
+                <div class="setup-step">
+                  <div class="step-header">
+                    <span class="step-num">2</span>
+                    <div>
+                      <h4>Nginx Configuration</h4>
+                      <p>Generate server block, symlink to sites-enabled, reload nginx.</p>
+                    </div>
+                    <span class="status-badge" id="nginxBadge">—</span>
+                  </div>
+                  <div class="inline-form setup-inline">
+                    <input id="setupDomain" type="text" placeholder="app.example.com">
+                    <select id="setupRuntime">
+                      <option value="static-site">Static HTML/CSS/JS</option>
+                      <option value="static-api">Static site + API</option>
+                      <option value="node-app">Node.js app/API</option>
+                      <option value="python-api">Python API/app</option>
+                      <option value="php-site">PHP site</option>
+                      <option value="wordpress-site">WordPress/WooCommerce</option>
+                    </select>
+                    <input id="setupPort" type="number" placeholder="App/API port" min="1024" max="65535">
+                    <input id="setupPhpSocket" type="text" placeholder="/run/php/php8.1-fpm.sock">
+                  </div>
+                  <button id="runNginx" type="button">Generate Nginx Config</button>
+                </div>
 
-    <!-- ── New Project Modal (outside app-shell to avoid z-index / stacking-context issues) ── -->
-    <div id="newProjectModal" class="modal-overlay" hidden>
-      <div class="modal-panel">
-        <div class="modal-header">
+                <div class="setup-step">
+                  <div class="step-header">
+                    <span class="step-num">3</span>
+                    <div>
+                      <h4>SSL Certificate</h4>
+                      <p>Certbot (Let's Encrypt) for trusted origin SSL.</p>
+                    </div>
+                    <span class="status-badge" id="sslBadge">—</span>
+                  </div>
+                  <button id="runSsl" type="button">Provision SSL</button>
+                </div>
+              </div>
+              <div class="terminal-output" id="setupOutput"></div>
+            </div>
+
+            <!-- Database panel -->
+            <div id="detailDatabase" class="detail-panel" hidden>
+              <div class="wizard-card" id="dbProvisionSection">
+                <div class="section-heading">
+                  <h4>Database Provisioning</h4>
+                  <span class="status-badge" id="dbBadge">—</span>
+                </div>
+                <div class="inline-form wizard-stack">
+                  <input id="dbName" type="text" placeholder="Database name (e.g. myapp_db)">
+                  <input id="dbUser" type="text" placeholder="DB username (e.g. myapp_user)">
+                  <select id="dbProvider">
+                    <option value="mariadb">MariaDB</option>
+                  </select>
+                </div>
+                <button id="provisionDb" type="button">Provision Database</button>
+              </div>
+
+              <div class="wizard-card">
+                <div class="section-heading">
+                  <h4>Tables</h4>
+                  <button id="refreshTables" class="ghost-button" type="button">↻ Refresh</button>
+                </div>
+                <div id="tablesList" class="tables-list"></div>
+              </div>
+
+              <div class="wizard-card">
+                <div class="section-heading">
+                  <div>
+                    <h4>Excel Import</h4>
+                    <p class="eyebrow">Feed .xlsx rows into an existing table</p>
+                  </div>
+                </div>
+                <form id="excelImportForm" class="inline-form excel-import-form">
+                  <select id="excelImportTable" required>
+                    <option value="">Create a table first</option>
+                  </select>
+                  <input id="excelImportFile" type="file"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                  <input id="excelSheetName" type="text" placeholder="Sheet name (optional)">
+                  <input id="excelHeaderRow" type="number" min="1" max="1000" value="1" aria-label="Header row">
+                  <button id="previewExcelImport" class="ghost-button" type="button">Preview</button>
+                  <button id="runExcelImport" type="submit">Import</button>
+                </form>
+                <div id="excelImportOutput" class="excel-import-output"></div>
+              </div>
+
+              <div class="wizard-card">
+                <h4>SQL Query Tool</h4>
+                <div class="preset-row" id="sqlPresetRow"></div>
+                <textarea id="sqlEditor" rows="7"
+                  placeholder="-- Write SQL here&#10;SELECT * FROM `your_table` LIMIT 100;"></textarea>
+                <button id="runSql" type="button">▶ Run Query</button>
+                <div class="terminal-output" id="sqlOutput"></div>
+                <div class="table-panel" id="sqlResultTable" hidden></div>
+              </div>
+            </div>
+
+            <!-- Endpoints panel -->
+            <div id="detailEndpoints" class="detail-panel" hidden>
+              <div class="section-heading">
+                <div>
+                  <h4>API Endpoints</h4>
+                  <p class="eyebrow">Managed endpoint registry — editable at any time</p>
+                </div>
+                <button id="addEndpointBtn" class="admin-only" type="button">+ Add</button>
+              </div>
+              <div id="addEndpointForm" class="endpoint-add-form admin-only" hidden>
+                <div class="endpoint-row">
+                  <input id="newEpName" type="text" placeholder="Endpoint name">
+                  <select id="newEpMethod">
+                    <option>GET</option>
+                    <option>POST</option>
+                    <option>PUT</option>
+                    <option>PATCH</option>
+                    <option>DELETE</option>
+                  </select>
+                  <input id="newEpPath" type="text" placeholder="/resource/path">
+                  <input id="newEpDesc" type="text" placeholder="Description">
+                  <button id="saveNewEndpoint" type="button">Add</button>
+                  <button id="cancelNewEndpoint" type="button" class="ghost-button">✕</button>
+                </div>
+              </div>
+              <div id="endpointsList" class="endpoints-table-wrap">
+                <p class="message">Loading endpoints…</p>
+              </div>
+            </div>
+
+            <!-- Git panel -->
+            <div id="detailGit" class="detail-panel" hidden>
+              <div class="wizard-card">
+                <h4>Repository</h4>
+                <div class="inline-form wizard-stack">
+                  <input id="gitRepoUrl" type="text" placeholder="git@github.com:user/repo.git or https://…">
+                  <input id="gitBranch" type="text" placeholder="Branch (e.g. main)" value="main">
+                </div>
+                <div class="git-actions">
+                  <button id="gitInit" type="button">Init</button>
+                  <button id="gitClone" type="button">Clone</button>
+                  <button id="gitPull" type="button">Pull</button>
+                </div>
+              </div>
+              <div class="wizard-card">
+                <h4>Commit &amp; Push</h4>
+                <div class="inline-form push-form">
+                  <input id="commitMsg" type="text" placeholder="Commit message">
+                  <button id="gitPush" type="button">↑ Push</button>
+                </div>
+              </div>
+              <div class="terminal-output" id="gitOutput"></div>
+              <div class="wizard-card">
+                <div class="section-heading">
+                  <h4>Status &amp; Log</h4>
+                  <button id="refreshGitStatus" class="ghost-button" type="button">↻ Refresh</button>
+                </div>
+                <pre id="gitStatusOut" class="git-log">Loading…</pre>
+              </div>
+            </div>
+
+            <!-- Services panel -->
+            <div id="detailServices" class="detail-panel" hidden>
+              <div class="section-heading">
+                <h4>Linked Services</h4>
+                <button id="addServiceBtn" class="admin-only" type="button">+ Add Service</button>
+              </div>
+
+              <!-- Smart service wizard -->
+              <div id="addServiceWizard" class="service-wizard admin-only" hidden>
+                <div class="wizard-header">
+                  <p class="eyebrow">Service Setup</p>
+                  <h5 id="wizardTitle">New systemd service</h5>
+                </div>
+
+                <!-- Mode selector -->
+                <div class="wizard-mode-selector">
+                  <label class="mode-option">
+                    <input type="radio" name="svcMode" id="modeCreate" value="create" checked>
+                    <span class="mode-card">
+                      <strong>🆕 Create &amp; Register</strong>
+                      <small>Write a new systemd unit file for this project</small>
+                    </span>
+                  </label>
+                  <label class="mode-option">
+                    <input type="radio" name="svcMode" id="modeLink" value="link">
+                    <span class="mode-card">
+                      <strong>🔗 Link Existing</strong>
+                      <small>Register a pre-installed systemd service</small>
+                    </span>
+                  </label>
+                </div>
+
+                <form id="addServiceForm" class="service-wizard-form">
+
+                  <!-- Service identity -->
+                  <div class="wizard-field-group">
+                    <label class="wizard-field">
+                      <span>Service name <em>(systemd unit)</em></span>
+                      <div class="input-with-hint">
+                        <input id="newSvcName" type="text" placeholder="e.g. my-app or my-app.service"
+                          autocomplete="off" required>
+                        <span class="input-hint" id="svcNameHint"></span>
+                      </div>
+                    </label>
+                    <label class="wizard-field">
+                      <span>Display label</span>
+                      <input id="newSvcLabel" type="text" placeholder="e.g. My App API">
+                    </label>
+                  </div>
+
+                  <!-- ExecStart (create mode only) -->
+                  <div id="createUnitFields">
+                    <div class="wizard-field-group">
+                      <label class="wizard-field full-width">
+                        <span>Start command <em>(ExecStart)</em></span>
+                        <div class="exec-presets-row">
+                          <button type="button" class="preset-chip" data-preset="npm start">npm start</button>
+                          <button type="button" class="preset-chip" data-preset="node server.js">node server.js</button>
+                          <button type="button" class="preset-chip" data-preset="node index.js">node index.js</button>
+                          <button type="button" class="preset-chip" data-preset="python3 app.py">python3 app.py</button>
+                          <button type="button" class="preset-chip" data-preset="python3 main.py">python3
+                            main.py</button>
+                          <button type="button" class="preset-chip" data-preset="npm run dev">npm run dev</button>
+                        </div>
+                        <input id="newSvcExec" type="text" placeholder="npm start — auto-filled from runtime">
+                      </label>
+                    </div>
+
+                    <div class="wizard-toggle-row">
+                      <label class="toggle-option">
+                        <input id="newSvcStart" type="checkbox">
+                        <span class="toggle-pill"></span>
+                        <span>Start service immediately after saving</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="wizard-actions">
+                    <button type="submit" id="saveServiceBtn" class="wizard-submit">Save Service</button>
+                    <button type="button" id="cancelAddService" class="ghost-button">Cancel</button>
+                  </div>
+
+                  <p id="serviceWizardMsg" class="wizard-feedback" role="status"></p>
+                </form>
+              </div>
+
+              <div id="projectServicesList" class="service-grid"></div>
+            </div>
+          </div><!-- /project-detail -->
+        </div><!-- /projects-layout -->
+      </section>
+
+      <!-- ── Users tab ──────────────────────────────────────────────── -->
+      <section id="access" class="panel-section admin-only" data-dashboard-screen="access" hidden>
+        <div class="section-heading">
           <div>
-            <p class="eyebrow">New deployment</p>
-            <h3>Create Project</h3>
+            <p class="eyebrow">Global users and project roles</p>
+            <h3>User Management</h3>
           </div>
-          <button id="closeModal" class="ghost-button modal-close" type="button">✕</button>
         </div>
 
-        <form id="projectForm" class="project-wizard">
-          <!-- Basics -->
-          <div class="wizard-section">
-            <div class="wizard-heading">
-              <h4>Project Basics</h4>
-              <p>Name, slug, and deployment path.</p>
-            </div>
-            <div class="wizard-form-grid">
-              <input name="name" type="text" placeholder="Project name" required minlength="2">
-              <input name="slug" type="text" placeholder="project-slug" required pattern="[a-z0-9][a-z0-9\-]{1,78}[a-z0-9]">
-              <input name="path" type="text" placeholder="/srv/my-project" required>
-            </div>
+        <div class="dual-form-grid">
+          <div class="wizard-card">
+            <h4>Create User</h4>
+            <form id="userForm" class="form-stack-tight">
+              <input name="username" type="text" placeholder="Username" required minlength="3">
+              <input name="password" type="password" placeholder="Password" required minlength="8">
+              <select name="role" required>
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button type="submit">Add User</button>
+            </form>
           </div>
-
-          <!-- Domain + Port + Git -->
-          <div class="wizard-section">
-            <div class="wizard-heading">
-              <h4>Hosting &amp; Git</h4>
-              <p>Domain, app port, and GitHub/GitLab repo URL.</p>
-            </div>
-            <div class="wizard-form-grid">
-              <input name="domain"     type="text"   placeholder="app.example.com (optional)">
-              <input name="port"       type="number" placeholder="Backend/API port (e.g. 4001)" min="1024" max="65535">
-              <input name="gitRepoUrl" type="text"   placeholder="git@github.com:user/repo.git (optional)">
-              <input name="gitBranch"  type="text"   placeholder="Branch (default: main)" value="main">
-            </div>
+          <div class="wizard-card">
+            <h4>Assign to Project</h4>
+            <form id="memberForm" class="form-stack-tight">
+              <select name="projectId" required>
+                <option value="">Select project</option>
+              </select>
+              <select name="userId" required>
+                <option value="">Select user</option>
+              </select>
+              <select name="role" required>
+                <option value="user">Project User</option>
+                <option value="manager">Project Manager</option>
+              </select>
+              <button type="submit">Assign</button>
+            </form>
           </div>
+        </div>
 
-          <!-- Project runtime -->
-          <div class="wizard-section">
-            <div class="wizard-heading">
-              <h4>Project Runtime</h4>
-              <p>Choose how Nginx and the project environment should be prepared.</p>
-            </div>
-            <select name="runtime" required>
-              <option value="static-site">Static HTML/CSS/JS</option>
-              <option value="static-api">Static site + API backend</option>
-              <option value="node-app">Node.js app/API</option>
-              <option value="python-api">Python API/app</option>
-              <option value="php-site">PHP site</option>
-              <option value="wordpress-site">WordPress/WooCommerce</option>
-            </select>
+        <div class="section-heading users-table-heading">
+          <div>
+            <p class="eyebrow">Accounts</p>
+            <h4>Users</h4>
           </div>
+          <input id="userSearch" class="table-search-input" type="search" placeholder="Search users">
+        </div>
+        <div id="usersTable" class="table-panel"></div>
+        <p id="accessMessage" class="message" role="status"></p>
+      </section>
+    </main>
+  </div>
 
-          <!-- DB + API wizard panels -->
-          <div class="wizard-section">
-            <fieldset class="wizard-card database-wizard">
-              <legend>Database Wizard</legend>
-              <p class="wizard-note">Configure the database connection details.</p>
-              <div class="wizard-form-grid">
-                <select name="database.provider">
-                  <option value="mariadb">MariaDB</option>
-                </select>
-                <input name="database.host"         type="text"   placeholder="DB host" value="127.0.0.1">
-                <input name="database.port"         type="number" placeholder="DB port" value="3306">
-                <input name="database.databaseName" type="text"   placeholder="Database name">
-                <input name="database.username"     type="text"   placeholder="Database user">
-              </div>
-              <div class="preset-row" data-query-preset-row></div>
-            </fieldset>
-
-            <fieldset class="wizard-card api-wizard" style="margin-top:14px">
-              <legend>API Wizard</legend>
-              <p class="wizard-note">Define required endpoints up-front.</p>
-              <input name="api.baseUrl" type="url" placeholder="https://api.example.com" style="width:100%">
-              <div class="preset-row" data-endpoint-preset-row style="margin-top:10px"></div>
-              <div class="endpoint-list" data-endpoint-list style="margin-top:8px"></div>
-              <button class="ghost-button" type="button" data-add-endpoint style="margin-top:8px">+ Endpoint</button>
-            </fieldset>
-
-            <fieldset class="wizard-card php-wizard" style="margin-top:14px">
-              <legend>PHP Runtime</legend>
-              <p class="wizard-note">Used for PHP, WordPress, and WooCommerce sites.</p>
-              <input name="php.fpmSocket" type="text" placeholder="/run/php/php8.1-fpm.sock" value="/run/php/php8.1-fpm.sock" style="width:100%">
-            </fieldset>
-          </div>
-
-          <!-- Notes -->
-          <div class="wizard-section">
-            <div class="wizard-heading">
-              <h4>Notes</h4>
-              <p>Optional deployment or schema notes.</p>
-            </div>
-            <textarea name="notes" rows="3" placeholder="Optional notes…"></textarea>
-          </div>
-
-          <div class="modal-actions">
-            <button type="submit">Create Project</button>
-            <button type="button" id="cancelCreateProject" class="ghost-button">Cancel</button>
-          </div>
-        </form>
+  <!-- ── New Project Modal (outside app-shell to avoid z-index / stacking-context issues) ── -->
+  <div id="newProjectModal" class="modal-overlay" hidden>
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">New deployment</p>
+          <h3>Create Project</h3>
+        </div>
+        <button id="closeModal" class="ghost-button modal-close" type="button">✕</button>
       </div>
-    </div>
 
-    <script type="module" src="/js/pages/dashboard.js"></script>
-  </body>
+      <form id="projectForm" class="project-wizard">
+        <!-- Basics -->
+        <div class="wizard-section">
+          <div class="wizard-heading">
+            <h4>Project Basics</h4>
+            <p>Name, slug, and deployment path.</p>
+          </div>
+          <div class="wizard-form-grid">
+            <input name="name" type="text" placeholder="Project name" required minlength="2">
+            <input name="slug" type="text" placeholder="project-slug" required
+              pattern="[a-z0-9][a-z0-9\-]{1,78}[a-z0-9]">
+            <input name="path" type="text" placeholder="/srv/my-project" required>
+          </div>
+        </div>
+
+        <!-- Domain + Port + Git -->
+        <div class="wizard-section">
+          <div class="wizard-heading">
+            <h4>Hosting &amp; Git</h4>
+            <p>Domain, app port, and GitHub/GitLab repo URL.</p>
+          </div>
+          <div class="wizard-form-grid">
+            <input name="domain" type="text" placeholder="app.example.com (optional)">
+            <input name="port" type="number" placeholder="Backend/API port (e.g. 4001)" min="1024" max="65535">
+            <input name="gitRepoUrl" type="text" placeholder="git@github.com:user/repo.git (optional)">
+            <input name="gitBranch" type="text" placeholder="Branch (default: main)" value="main">
+          </div>
+        </div>
+
+        <!-- Project runtime -->
+        <div class="wizard-section">
+          <div class="wizard-heading">
+            <h4>Project Runtime</h4>
+            <p>Choose how Nginx and the project environment should be prepared.</p>
+          </div>
+          <select name="runtime" required>
+            <option value="static-site">Static HTML/CSS/JS</option>
+            <option value="static-api">Static site + API backend</option>
+            <option value="node-app">Node.js app/API</option>
+            <option value="python-api">Python API/app</option>
+            <option value="php-site">PHP site</option>
+            <option value="wordpress-site">WordPress/WooCommerce</option>
+          </select>
+        </div>
+
+        <!-- DB + API wizard panels -->
+        <div class="wizard-section">
+          <fieldset class="wizard-card database-wizard">
+            <legend>Database Wizard</legend>
+            <p class="wizard-note">Configure the database connection details.</p>
+            <div class="wizard-form-grid">
+              <select name="database.provider">
+                <option value="mariadb">MariaDB</option>
+              </select>
+              <input name="database.host" type="text" placeholder="DB host" value="127.0.0.1">
+              <input name="database.port" type="number" placeholder="DB port" value="3306">
+              <input name="database.databaseName" type="text" placeholder="Database name">
+              <input name="database.username" type="text" placeholder="Database user">
+            </div>
+            <div class="preset-row" data-query-preset-row></div>
+          </fieldset>
+
+          <fieldset class="wizard-card api-wizard" style="margin-top:14px">
+            <legend>API Wizard</legend>
+            <p class="wizard-note">Define required endpoints up-front.</p>
+            <input name="api.baseUrl" type="url" placeholder="https://api.example.com" style="width:100%">
+            <div class="preset-row" data-endpoint-preset-row style="margin-top:10px"></div>
+            <div class="endpoint-list" data-endpoint-list style="margin-top:8px"></div>
+            <button class="ghost-button" type="button" data-add-endpoint style="margin-top:8px">+ Endpoint</button>
+          </fieldset>
+
+          <fieldset class="wizard-card php-wizard" style="margin-top:14px">
+            <legend>PHP Runtime</legend>
+            <p class="wizard-note">Used for PHP, WordPress, and WooCommerce sites.</p>
+            <input name="php.fpmSocket" type="text" placeholder="/run/php/php8.1-fpm.sock"
+              value="/run/php/php8.1-fpm.sock" style="width:100%">
+          </fieldset>
+        </div>
+
+        <!-- Notes -->
+        <div class="wizard-section">
+          <div class="wizard-heading">
+            <h4>Notes</h4>
+            <p>Optional deployment or schema notes.</p>
+          </div>
+          <textarea name="notes" rows="3" placeholder="Optional notes…"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="submit">Create Project</button>
+          <button type="button" id="cancelCreateProject" class="ghost-button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="/js/pages/dashboard.js"></script>
+</body>
+
 </html>

@@ -1,43 +1,47 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>EKAFY Login</title>
-    <link rel="stylesheet" href="/style.css">
-  </head>
-  <body class="auth-page">
-    <div id="globalMessageBar" class="global-message-bar" role="status" aria-live="polite" hidden>
-      <span class="global-message-text"></span>
-      <button type="button" class="global-message-close" aria-label="Dismiss message">&times;</button>
-    </div>
-    <main class="auth-shell">
-      <section class="auth-panel">
-        <div class="brand-row">
-          <div class="brand-mark">E</div>
-          <div>
-            <h1>EKAFY</h1>
-            <p>VPS control panel</p>
-          </div>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EKAFY Login</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+
+<body class="auth-page">
+  <div id="globalMessageBar" class="global-message-bar" role="status" aria-live="polite" hidden>
+    <span class="global-message-text"></span>
+    <button type="button" class="global-message-close" aria-label="Dismiss message">&times;</button>
+  </div>
+  <main class="auth-shell">
+    <section class="auth-panel">
+      <div class="brand-row">
+        <div class="brand-mark">E</div>
+        <div>
+          <h1>EKAFY</h1>
+          <p>VPS control panel</p>
         </div>
+      </div>
 
-        <form id="loginForm" class="form-stack">
-          <label>
-            Username
-            <input id="username" name="username" type="text" autocomplete="username" required minlength="3">
-          </label>
+      <form id="loginForm" class="form-stack">
+        <label>
+          Username
+          <input id="username" name="username" type="text" autocomplete="username" required minlength="3">
+        </label>
 
-          <label>
-            Password
-            <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
-          </label>
+        <label>
+          Password
+          <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
+        </label>
 
-          <button type="submit">Sign in</button>
-          <p id="authMessage" class="message" role="status"></p>
-        </form>
-      </section>
-    </main>
+        <button type="submit">Sign in</button>
+        <p id="authMessage" class="message" role="status"></p>
+      </form>
+    </section>
+  </main>
 
-    <script type="module" src="/js/pages/login.js"></script>
-  </body>
+  <script type="module" src="/js/pages/login.js"></script>
+</body>
+
 </html>
