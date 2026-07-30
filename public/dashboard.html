@@ -5,6 +5,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EKAFY Dashboard</title>
+  <script>
+    (() => {
+      try {
+        const preference = localStorage.getItem('ekafy-theme') || 'system';
+        const theme = preference === 'system'
+          ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+          : preference;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.themePreference = preference;
+      } catch (_) {}
+    })();
+  </script>
   <meta name="description" content="EKAFY VPS control panel — manage projects, services, databases, and deployments.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,6 +71,14 @@
         <div class="topbar-right">
           <button id="updateAppButton" class="ghost-button admin-only" type="button" hidden>↺ Update manager</button>
           <button id="restartManagerButton" class="ghost-button admin-only" type="button" hidden>↻ Restart manager</button>
+          <label class="theme-control" for="themeSelector">
+            <span>Theme</span>
+            <select id="themeSelector" aria-label="Dashboard theme">
+              <option value="system">System</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
           <div class="refresh-pill" id="refreshPill">Auto-refresh 5s</div>
         </div>
       </header>

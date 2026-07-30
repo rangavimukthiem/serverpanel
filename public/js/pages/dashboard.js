@@ -16,6 +16,7 @@ import { setupProjectWizard } from '../dashboard/wizard.js';
 import { initProjectDetail } from '../dashboard/projectDetail.js';
 import { loadStatus, handleStatusError } from '../dashboard/status.js';
 import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
+import { initThemeSelector } from '../shared/theme.js';
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ function startSystemStatusLoop() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function bootDashboard() {
+  initThemeSelector();
+
   let session;
   try {
     session = await api('/api/auth/me');
