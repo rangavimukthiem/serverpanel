@@ -61,6 +61,91 @@
   --message-bg: rgba(255, 255, 255, 0.98);
 }
 
+/* Low-glare palettes for long dashboard sessions. */
+:root[data-theme="pearl"] {
+  color-scheme: light;
+  --bg: #eeeee8;
+  --panel: #f7f6ef;
+  --panel-soft: #e7e7df;
+  --panel-deep: #f1f0e9;
+  --line: #d1d1c7;
+  --line-soft: #ddddD4;
+  --text: #30332f;
+  --muted: #6d736b;
+  --accent: #547d70;
+  --accent-strong: #41675c;
+  --accent-dim: rgba(84, 125, 112, 0.11);
+  --accent-glow: rgba(84, 125, 112, 0.16);
+  --danger: #ad5260;
+  --danger-dim: rgba(173, 82, 96, 0.09);
+  --warning: #9b7535;
+  --warning-dim: rgba(155, 117, 53, 0.1);
+  --success: #4f7b61;
+  --success-dim: rgba(79, 123, 97, 0.1);
+  --info: #55758e;
+  --shadow: 0 8px 24px rgba(48, 51, 47, 0.09);
+  --shadow-sm: 0 2px 7px rgba(48, 51, 47, 0.07);
+  --chrome: rgba(247, 246, 239, 0.96);
+  --chrome-strong: rgba(238, 238, 232, 0.93);
+  --message-bg: rgba(247, 246, 239, 0.98);
+}
+
+:root[data-theme="sepia"] {
+  color-scheme: light;
+  --bg: #eee3cb;
+  --panel: #f7edd8;
+  --panel-soft: #e8d9bb;
+  --panel-deep: #f1e5cf;
+  --line: #d1bd98;
+  --line-soft: #dfccaa;
+  --text: #44382b;
+  --muted: #796852;
+  --accent: #817044;
+  --accent-strong: #695a35;
+  --accent-dim: rgba(129, 112, 68, 0.12);
+  --accent-glow: rgba(129, 112, 68, 0.17);
+  --danger: #a64f45;
+  --danger-dim: rgba(166, 79, 69, 0.1);
+  --warning: #93681e;
+  --warning-dim: rgba(147, 104, 30, 0.11);
+  --success: #55744d;
+  --success-dim: rgba(85, 116, 77, 0.11);
+  --info: #526f7d;
+  --shadow: 0 8px 24px rgba(68, 56, 43, 0.1);
+  --shadow-sm: 0 2px 7px rgba(68, 56, 43, 0.08);
+  --chrome: rgba(247, 237, 216, 0.96);
+  --chrome-strong: rgba(238, 227, 203, 0.93);
+  --message-bg: rgba(247, 237, 216, 0.98);
+}
+
+:root[data-theme="night-comfort"] {
+  color-scheme: dark;
+  --bg: #17140f;
+  --panel: #211d16;
+  --panel-soft: #2c271e;
+  --panel-deep: #1b1812;
+  --line: #40382a;
+  --line-soft: #342e23;
+  --text: #ddd3bd;
+  --muted: #9b907b;
+  --accent: #c29b5b;
+  --accent-strong: #ab8245;
+  --accent-dim: rgba(194, 155, 91, 0.13);
+  --accent-glow: rgba(194, 155, 91, 0.19);
+  --danger: #cf7772;
+  --danger-dim: rgba(207, 119, 114, 0.11);
+  --warning: #d1a75f;
+  --warning-dim: rgba(209, 167, 95, 0.11);
+  --success: #83a477;
+  --success-dim: rgba(131, 164, 119, 0.11);
+  --info: #819cab;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.24);
+  --chrome: rgba(23, 20, 15, 0.97);
+  --chrome-strong: rgba(23, 20, 15, 0.94);
+  --message-bg: rgba(27, 24, 18, 0.98);
+}
+
 :root[data-theme="ocean"] {
   color-scheme: dark;
   --bg: #061521;

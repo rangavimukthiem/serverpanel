@@ -8,7 +8,7 @@
   <script>
     (() => {
       try {
-        const supported = ['system', 'dark', 'light', 'ocean', 'violet', 'forest', 'sunset'];
+        const supported = ['system', 'dark', 'light', 'pearl', 'sepia', 'night-comfort', 'ocean', 'violet', 'forest', 'sunset'];
         const stored = localStorage.getItem('ekafy-theme');
         const preference = supported.includes(stored) ? stored : 'system';
         const theme = preference === 'system'
@@ -79,6 +79,9 @@
               <option value="system">System</option>
               <option value="dark">Dark</option>
               <option value="light">Light</option>
+              <option value="pearl">Pearl</option>
+              <option value="sepia">Sepia</option>
+              <option value="night-comfort">Night Comfort</option>
               <option value="ocean">Ocean</option>
               <option value="violet">Violet</option>
               <option value="forest">Forest</option>
