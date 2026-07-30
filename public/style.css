@@ -61,6 +61,88 @@
   --message-bg: rgba(255, 255, 255, 0.98);
 }
 
+:root[data-theme="ocean"] {
+  color-scheme: dark;
+  --bg: #061521;
+  --panel: #0b2030;
+  --panel-soft: #102b3e;
+  --panel-deep: #071a27;
+  --line: #1d4055;
+  --line-soft: #153448;
+  --text: #e2f5ff;
+  --muted: #82a9bd;
+  --accent: #38bdf8;
+  --accent-strong: #0ea5e9;
+  --accent-dim: rgba(56, 189, 248, 0.13);
+  --accent-glow: rgba(56, 189, 248, 0.24);
+  --info: #67e8f9;
+  --chrome: rgba(6, 21, 33, 0.96);
+  --chrome-strong: rgba(6, 21, 33, 0.92);
+  --message-bg: rgba(7, 26, 39, 0.98);
+}
+
+:root[data-theme="violet"] {
+  color-scheme: dark;
+  --bg: #120d20;
+  --panel: #1c1530;
+  --panel-soft: #281d41;
+  --panel-deep: #160f27;
+  --line: #3c2d59;
+  --line-soft: #302247;
+  --text: #f2ebff;
+  --muted: #aa94c7;
+  --accent: #c084fc;
+  --accent-strong: #a855f7;
+  --accent-dim: rgba(192, 132, 252, 0.13);
+  --accent-glow: rgba(192, 132, 252, 0.24);
+  --info: #a5b4fc;
+  --chrome: rgba(18, 13, 32, 0.96);
+  --chrome-strong: rgba(18, 13, 32, 0.92);
+  --message-bg: rgba(22, 15, 39, 0.98);
+}
+
+:root[data-theme="forest"] {
+  color-scheme: dark;
+  --bg: #081710;
+  --panel: #10241a;
+  --panel-soft: #173223;
+  --panel-deep: #0b1d14;
+  --line: #295039;
+  --line-soft: #1e402d;
+  --text: #e5f8eb;
+  --muted: #8aaa94;
+  --accent: #4ade80;
+  --accent-strong: #22c55e;
+  --accent-dim: rgba(74, 222, 128, 0.13);
+  --accent-glow: rgba(74, 222, 128, 0.23);
+  --success: #86efac;
+  --info: #5eead4;
+  --chrome: rgba(8, 23, 16, 0.96);
+  --chrome-strong: rgba(8, 23, 16, 0.92);
+  --message-bg: rgba(11, 29, 20, 0.98);
+}
+
+:root[data-theme="sunset"] {
+  color-scheme: dark;
+  --bg: #1b0e0b;
+  --panel: #291611;
+  --panel-soft: #3a2018;
+  --panel-deep: #21110d;
+  --line: #593325;
+  --line-soft: #47271d;
+  --text: #fff1e8;
+  --muted: #c19b87;
+  --accent: #fb923c;
+  --accent-strong: #f97316;
+  --accent-dim: rgba(251, 146, 60, 0.13);
+  --accent-glow: rgba(251, 146, 60, 0.24);
+  --warning: #facc15;
+  --info: #f0abfc;
+  --chrome: rgba(27, 14, 11, 0.96);
+  --chrome-strong: rgba(27, 14, 11, 0.92);
+  --message-bg: rgba(33, 17, 13, 0.98);
+}
+
 /* ─── Reset ────────────────────────────────────────────────────────────────── */
 *,
 *::before,

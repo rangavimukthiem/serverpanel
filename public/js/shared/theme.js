@@ -1,5 +1,5 @@
 const THEME_KEY = 'ekafy-theme';
-const VALID_THEMES = new Set(['system', 'dark', 'light']);
+const VALID_THEMES = new Set(['system', 'dark', 'light', 'ocean', 'violet', 'forest', 'sunset']);
 const colorSchemeQuery = window.matchMedia('(prefers-color-scheme: light)');
 
 function resolveTheme(preference) {
