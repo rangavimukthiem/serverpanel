@@ -113,7 +113,7 @@ async function init(req, res, next) {
     }
 
     const repoUrl = (req.body.repoUrl || '').trim();
-    const branch  = (req.body.branch || project.git_branch || 'main').trim();
+    const branch = (req.body.branch || project.git_branch || 'main').trim();
 
     const initResult = await runGit(['init', '-b', branch], project.path);
     const lines = [initResult.stdout, initResult.stderr].filter(Boolean);
@@ -156,7 +156,7 @@ async function clone(req, res, next) {
     }
 
     const repoUrl = (req.body.repoUrl || '').trim();
-    const branch  = (req.body.branch || project.git_branch || 'main').trim();
+    const branch = (req.body.branch || project.git_branch || 'main').trim();
 
     if (!repoUrl) {
       return res.status(400).json({ message: 'repoUrl is required' });
@@ -213,6 +213,74 @@ async function pull(req, res, next) {
 }
 
 /**
+ * POST /api/projects/:id/git/pull/force
+ *
+ * Force-pulls the latest changes from origin for the configured branch.
+ */
+async function pullForced(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+    if (!requireLinux(res)) return;
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const branch = project.git_branch || 'main';
+    const result = await runGit(['pull', '--force', 'origin', branch], project.path);
+
+    await createLog({ userId: req.user.id, action: `git pull --force on project ${project.name}` });
+
+    return res.json({
+      message: result.ok ? 'Forced pull complete' : 'Forced pull encountered errors',
+      ok: result.ok,
+      output: [result.stdout, result.stderr].filter(Boolean).join('\n')
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
+ * POST /api/projects/:id/git/remove-remote
+ *
+ * Removes the configured remote from the repository.
+ */
+async function removeRemote(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+    if (!requireLinux(res)) return;
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const remoteName = (req.body.remoteName || 'origin').trim() || 'origin';
+    const result = await runGit(['remote', 'remove', remoteName], project.path);
+
+    await createLog({ userId: req.user.id, action: `git remote remove ${remoteName} on project ${project.name}` });
+
+    return res.json({
+      message: result.ok ? 'Remote removed' : 'Remote removal encountered errors',
+      ok: result.ok,
+      output: [result.stdout, result.stderr].filter(Boolean).join('\n')
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
  * POST /api/projects/:id/git/push
  *
  * Body: { message? } — commit message (defaults to timestamp)
@@ -237,9 +305,9 @@ async function push(req, res, next) {
       `deploy: ${new Date().toISOString()} [EKAFY]`;
     const branch = project.git_branch || 'main';
 
-    const addResult    = await runGit(['add', '-A'], project.path);
+    const addResult = await runGit(['add', '-A'], project.path);
     const commitResult = await runGit(['commit', '-m', commitMessage], project.path);
-    const pushResult   = await runGit(['push', 'origin', branch], project.path);
+    const pushResult = await runGit(['push', 'origin', branch], project.path);
 
     await createLog({ userId: req.user.id, action: `git push on project ${project.name}: "${commitMessage}"` });
 
@@ -256,4 +324,4 @@ async function push(req, res, next) {
   }
 }
 
-module.exports = { status, init, clone, pull, push };
+module.exports = { status, init, clone, pull, pullForced, removeRemote, push };

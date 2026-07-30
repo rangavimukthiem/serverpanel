@@ -1,7 +1,9 @@
 const os = require('os');
+const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { query } = require('../config/db');
+const { createLog } = require('../models/logModel');
 
 const execFileAsync = promisify(execFile);
 
@@ -106,6 +108,75 @@ async function getProjectSummary() {
   };
 }
 
+async function updateDashboardFromGit(req, res, next) {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const appRoot = process.env.APP_DIR || path.resolve(__dirname, '..');
+    const branch = (req.body?.branch || 'main').toString().trim() || 'main';
+    const serviceName = process.env.SERVICE_NAME || 'ekafy';
+
+    const output = [];
+
+    const gitCheck = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: appRoot,
+      timeout: 15000
+    }).catch((error) => ({ stdout: '', stderr: error.message, ok: false }));
+
+    if (!gitCheck.stdout || gitCheck.stdout.trim() !== 'true') {
+      return res.status(400).json({
+        message: 'The dashboard directory is not a Git repository.',
+        code: 'NOT_A_GIT_REPOSITORY',
+        details: gitCheck.stderr || null
+      });
+    }
+
+    const fetchResult = await execFileAsync('git', ['fetch', 'origin', branch], {
+      cwd: appRoot,
+      timeout: 120000
+    });
+    output.push(fetchResult.stdout.trim(), fetchResult.stderr.trim());
+
+    const pullResult = await execFileAsync('git', ['pull', '--ff-only', 'origin', branch], {
+      cwd: appRoot,
+      timeout: 120000
+    });
+    output.push(pullResult.stdout.trim(), pullResult.stderr.trim());
+
+    const installResult = await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], {
+      cwd: appRoot,
+      timeout: 900000
+    });
+    output.push(installResult.stdout.trim(), installResult.stderr.trim());
+
+    if (process.env.ENABLE_SERVICE_CONTROL !== 'false' && process.platform !== 'win32') {
+      try {
+        const restartResult = await execFileAsync('systemctl', ['restart', serviceName], {
+          timeout: 30000
+        });
+        output.push(restartResult.stdout.trim(), restartResult.stderr.trim());
+      } catch (_error) {
+        output.push(`Service restart skipped or failed for ${serviceName}`);
+      }
+    }
+
+    await createLog({
+      userId: req.user.id,
+      action: `updated dashboard app from GitHub on branch ${branch}`
+    });
+
+    return res.json({
+      ok: true,
+      message: 'Dashboard updated successfully. Existing databases and app data were preserved.',
+      output: output.filter(Boolean).join('\n')
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function status(req, res, next) {
   try {
     const totalMemory = os.totalmem();
@@ -161,5 +232,6 @@ async function status(req, res, next) {
 }
 
 module.exports = {
-  status
+  status,
+  updateDashboardFromGit
 };

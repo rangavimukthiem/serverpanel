@@ -15,7 +15,7 @@ import { bindAdminForms } from '../dashboard/forms.js';
 import { setupProjectWizard } from '../dashboard/wizard.js';
 import { initProjectDetail } from '../dashboard/projectDetail.js';
 import { loadStatus, handleStatusError } from '../dashboard/status.js';
-import { reportGlobalError } from '../shared/errors.js';
+import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
@@ -121,6 +121,29 @@ async function bootDashboard() {
   const refreshBtn = document.getElementById('refreshStatusButton');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => { loadServices(); refreshServiceStatuses(); });
+  }
+
+  // Dashboard update button
+  const updateAppButton = document.getElementById('updateAppButton');
+  if (updateAppButton) {
+    updateAppButton.addEventListener('click', async () => {
+      const confirmed = window.confirm('Update the dashboard from GitHub? This will pull the latest code and install dependencies, while preserving existing databases and app data.');
+      if (!confirmed) return;
+
+      updateAppButton.disabled = true;
+      updateAppButton.textContent = 'Updating…';
+
+      try {
+        const data = await api('/api/system/update', { method: 'POST' });
+        const content = data.output ? data.output.slice(0, 400) : '';
+        showGlobalMessage(data.message || 'Dashboard updated', 'success', content || null);
+      } catch (error) {
+        reportGlobalError(error, 'Dashboard update');
+      } finally {
+        updateAppButton.disabled = false;
+        updateAppButton.textContent = '↺ Update app';
+      }
+    });
   }
 
   // Services action delegation

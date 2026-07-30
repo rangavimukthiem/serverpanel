@@ -27,7 +27,7 @@ async function loadGitStatus(project) {
     let text = '';
     if (data.branch) text += `Branch: ${data.branch}\n\n`;
     if (data.status) text += `--- Status ---\n${data.status}\n\n`;
-    if (data.log)    text += `--- Log ---\n${data.log}`;
+    if (data.log) text += `--- Log ---\n${data.log}`;
     pre.textContent = text || 'Repository is clean.';
   } catch (_) {
     pre.textContent = 'No git repository found at project path.';
@@ -36,10 +36,10 @@ async function loadGitStatus(project) {
 
 export function loadGitTab(project) {
   // Pre-fill form fields
-  const urlInput    = document.getElementById('gitRepoUrl');
+  const urlInput = document.getElementById('gitRepoUrl');
   const branchInput = document.getElementById('gitBranch');
-  if (urlInput)    urlInput.value    = project.git_repo_url || '';
-  if (branchInput) branchInput.value = project.git_branch   || 'main';
+  if (urlInput) urlInput.value = project.git_repo_url || '';
+  if (branchInput) branchInput.value = project.git_branch || 'main';
 
   loadGitStatus(project);
   bindGitActions(project);
@@ -60,7 +60,7 @@ function bindGitActions(project) {
   // Init
   freshBind('gitInit', async () => {
     const repoUrl = document.getElementById('gitRepoUrl')?.value.trim();
-    const branch  = document.getElementById('gitBranch')?.value.trim() || 'main';
+    const branch = document.getElementById('gitBranch')?.value.trim() || 'main';
     clearOutput();
     writeOutput(`git init${repoUrl ? ` + remote ${repoUrl}` : ''}…`);
     try {
@@ -79,7 +79,7 @@ function bindGitActions(project) {
   // Clone
   freshBind('gitClone', async () => {
     const repoUrl = document.getElementById('gitRepoUrl')?.value.trim();
-    const branch  = document.getElementById('gitBranch')?.value.trim() || 'main';
+    const branch = document.getElementById('gitBranch')?.value.trim() || 'main';
     if (!repoUrl) { writeOutput('✗ Repo URL is required for clone'); return; }
     clearOutput();
     writeOutput(`git clone ${repoUrl} (${branch})…`);
@@ -108,6 +108,37 @@ function bindGitActions(project) {
     } catch (err) {
       writeOutput(`✗ ${err.message}`);
       reportGlobalError(err, 'Git pull');
+    }
+  });
+
+  // Forced pull
+  freshBind('gitPullForce', async () => {
+    clearOutput();
+    writeOutput(`git pull --force origin ${project.git_branch || 'main'}…`);
+    try {
+      const data = await api(`/api/projects/${project.id}/git/pull/force`, { method: 'POST' });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git forced pull');
+    }
+  });
+
+  // Remove remote
+  freshBind('gitRemoveRemote', async () => {
+    clearOutput();
+    writeOutput('git remote remove origin…');
+    try {
+      const data = await api(`/api/projects/${project.id}/git/remove-remote`, {
+        method: 'POST',
+        body: JSON.stringify({ remoteName: 'origin' })
+      });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git remove remote');
     }
   });
 
