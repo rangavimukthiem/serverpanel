@@ -1,11 +1,31 @@
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { query } = require('../config/db');
 const { createLog } = require('../models/logModel');
 
 const execFileAsync = promisify(execFile);
+const UPDATE_BRANCH_PATTERN = /^[A-Za-z0-9._\/-]{1,128}$/;
+let updateInProgress = false;
+let restartInProgress = false;
+
+function managerGitArgs(appRoot, args) {
+  return ['-c', `safe.directory=${appRoot}`, ...args];
+}
+
+function scheduleManagerRestart(serviceName) {
+  const restartTimer = setTimeout(() => {
+    execFile('sudo', ['-n', 'systemctl', 'restart', serviceName], (error) => {
+      if (error) {
+        restartInProgress = false;
+        console.error(`Unable to restart ${serviceName}:`, error.message);
+      }
+    });
+  }, 1000);
+  restartTimer.unref();
+}
 
 function snapshotCpu() {
   const cpus = os.cpus();
@@ -109,70 +129,151 @@ async function getProjectSummary() {
 }
 
 async function updateDashboardFromGit(req, res, next) {
+  if (updateInProgress) {
+    return res.status(409).json({
+      message: 'A server manager update is already running.',
+      code: 'UPDATE_IN_PROGRESS'
+    });
+  }
+
+  updateInProgress = true;
   try {
     if (req.user?.role !== 'admin') {
       return res.status(403).json({ message: 'Admin access required' });
     }
 
-    const appRoot = process.env.APP_DIR || path.resolve(__dirname, '..');
+    const configuredRoot = process.env.APP_DIR || path.resolve(__dirname, '..');
+    const appRoot = path.resolve(configuredRoot);
     const branch = (req.body?.branch || 'main').toString().trim() || 'main';
     const serviceName = process.env.SERVICE_NAME || 'ekafy';
 
+    if (appRoot === path.parse(appRoot).root) {
+      return res.status(500).json({
+        message: 'Refusing to update from the filesystem root. Check APP_DIR in .env.',
+        code: 'INVALID_APP_ROOT'
+      });
+    }
+
+    if (!UPDATE_BRANCH_PATTERN.test(branch) || branch.includes('..') || branch.startsWith('-')) {
+      return res.status(400).json({ message: 'Invalid update branch.', code: 'INVALID_BRANCH' });
+    }
+
     const output = [];
 
-    const gitCheck = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], {
+    const envPath = path.join(appRoot, '.env');
+    if (fs.existsSync(envPath)) {
+      const envBackupPath = path.join(appRoot, '.env.update-backup');
+      fs.copyFileSync(envPath, envBackupPath);
+      fs.chmodSync(envBackupPath, 0o600);
+      output.push(`Configuration backup: ${envBackupPath}`);
+    }
+
+    const gitCheck = await execFileAsync('git', managerGitArgs(appRoot, ['rev-parse', '--show-toplevel']), {
       cwd: appRoot,
       timeout: 15000
     }).catch((error) => ({ stdout: '', stderr: error.message, ok: false }));
 
-    if (!gitCheck.stdout || gitCheck.stdout.trim() !== 'true') {
+    const repositoryRoot = gitCheck.stdout ? path.resolve(gitCheck.stdout.trim()) : null;
+    if (!repositoryRoot || repositoryRoot !== appRoot) {
       return res.status(400).json({
-        message: 'The dashboard directory is not a Git repository.',
+        message: 'The EKAFY app directory is not its own Git repository. Run the one-time GitHub update command to install repository metadata.',
         code: 'NOT_A_GIT_REPOSITORY',
         details: gitCheck.stderr || null
       });
     }
 
-    const fetchResult = await execFileAsync('git', ['fetch', 'origin', branch], {
+    const fetchResult = await execFileAsync('git', managerGitArgs(appRoot, ['fetch', 'origin', branch]), {
       cwd: appRoot,
       timeout: 120000
     });
     output.push(fetchResult.stdout.trim(), fetchResult.stderr.trim());
 
-    const pullResult = await execFileAsync('git', ['pull', '--ff-only', 'origin', branch], {
+    const pullResult = await execFileAsync('git', managerGitArgs(appRoot, ['pull', '--ff-only', 'origin', branch]), {
       cwd: appRoot,
       timeout: 120000
     });
     output.push(pullResult.stdout.trim(), pullResult.stderr.trim());
 
-    const installResult = await execFileAsync('npm', ['install', '--no-audit', '--no-fund'], {
+    const installArgs = fs.existsSync(path.join(appRoot, 'package-lock.json'))
+      ? ['ci', '--omit=dev', '--no-audit', '--no-fund']
+      : ['install', '--omit=dev', '--no-audit', '--no-fund'];
+    const installResult = await execFileAsync('npm', installArgs, {
       cwd: appRoot,
       timeout: 900000
     });
     output.push(installResult.stdout.trim(), installResult.stderr.trim());
-
-    if (process.env.ENABLE_SERVICE_CONTROL !== 'false' && process.platform !== 'win32') {
-      try {
-        const restartResult = await execFileAsync('systemctl', ['restart', serviceName], {
-          timeout: 30000
-        });
-        output.push(restartResult.stdout.trim(), restartResult.stderr.trim());
-      } catch (_error) {
-        output.push(`Service restart skipped or failed for ${serviceName}`);
-      }
-    }
 
     await createLog({
       userId: req.user.id,
       action: `updated dashboard app from GitHub on branch ${branch}`
     });
 
-    return res.json({
+    const shouldRestart = process.env.ENABLE_SERVICE_CONTROL !== 'false' && process.platform !== 'win32';
+    const response = res.json({
       ok: true,
-      message: 'Dashboard updated successfully. Existing databases and app data were preserved.',
+      message: 'Server manager updated. Configuration, databases, projects, and app data were preserved.',
+      restarting: shouldRestart,
       output: output.filter(Boolean).join('\n')
     });
+
+    // Restart only after the HTTP response has been sent, otherwise the update
+    // request is terminated by its own service restart.
+    if (shouldRestart) {
+      restartInProgress = true;
+      scheduleManagerRestart(serviceName);
+    }
+
+    return response;
   } catch (error) {
+    return next(error);
+  } finally {
+    updateInProgress = false;
+  }
+}
+
+async function restartServerManager(req, res, next) {
+  try {
+    if (process.platform === 'win32' || process.env.ENABLE_SERVICE_CONTROL === 'false') {
+      return res.status(503).json({
+        message: 'Server manager restart control is disabled.',
+        code: 'SERVICE_CONTROL_DISABLED'
+      });
+    }
+
+    if (updateInProgress) {
+      return res.status(409).json({
+        message: 'Wait for the server manager update to finish before restarting.',
+        code: 'UPDATE_IN_PROGRESS'
+      });
+    }
+
+    if (restartInProgress) {
+      return res.status(409).json({
+        message: 'A server manager restart is already scheduled.',
+        code: 'RESTART_IN_PROGRESS'
+      });
+    }
+
+    const serviceName = process.env.SERVICE_NAME || 'ekafy';
+    if (!/^[A-Za-z0-9_.@-]{1,128}$/.test(serviceName)) {
+      return res.status(500).json({ message: 'Invalid configured service name.', code: 'INVALID_SERVICE_NAME' });
+    }
+
+    await createLog({
+      userId: req.user.id,
+      action: `restarted server manager service ${serviceName}`
+    });
+
+    restartInProgress = true;
+    const response = res.json({
+      ok: true,
+      restarting: true,
+      message: `Server manager restart scheduled for ${serviceName}.`
+    });
+    scheduleManagerRestart(serviceName);
+    return response;
+  } catch (error) {
+    restartInProgress = false;
     return next(error);
   }
 }
@@ -233,5 +334,6 @@ async function status(req, res, next) {
 
 module.exports = {
   status,
-  updateDashboardFromGit
+  updateDashboardFromGit,
+  restartServerManager
 };

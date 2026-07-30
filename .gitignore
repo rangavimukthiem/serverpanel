@@ -1,5 +1,6 @@
 node_modules/
 .env
+.env.update-backup
 *.log
 npm-debug.log*
 .DS_Store

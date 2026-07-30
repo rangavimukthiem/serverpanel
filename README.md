@@ -171,6 +171,30 @@ The initializer does the heavy lifting:
 - Optionally creates the first admin user.
 - Writes sudoers rules for allowed service, Nginx, Certbot, cleanup, and resource-limit operations.
 
+## Updating the Server Manager Safely
+
+Administrators can use **Update manager** in the dashboard. It fast-forwards the
+installed Git checkout, installs production dependencies, and restarts the panel.
+The update does not import `database.sql` or replace `.env`, project directories,
+uploads, storage, or databases. A mode-`600` `.env.update-backup` is created first.
+
+To download the latest `main` branch directly from GitHub and update, run:
+
+```bash
+sudo bash /srv/ekafy/init.sh --update \
+  --app-dir /srv/ekafy \
+  --repo-url https://github.com/rangavimukthiem/serverpanel.git \
+  --branch main
+```
+
+The `--update` mode skips package provisioning, MariaDB setup, environment-file
+generation, admin creation, Nginx configuration, and SSL provisioning.
+
+Administrators can also use **Restart manager** to restart only the EKAFY systemd
+service. Both manager controls require an authenticated admin account and write an
+activity-log entry. The initializer installs Git and provisions the required
+non-interactive systemd restart permission for the configured EKAFY service.
+
 ## Manual Local Setup
 
 Install dependencies:

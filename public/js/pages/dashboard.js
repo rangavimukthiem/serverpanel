@@ -127,7 +127,7 @@ async function bootDashboard() {
   const updateAppButton = document.getElementById('updateAppButton');
   if (updateAppButton) {
     updateAppButton.addEventListener('click', async () => {
-      const confirmed = window.confirm('Update the dashboard from GitHub? This will pull the latest code and install dependencies, while preserving existing databases and app data.');
+      const confirmed = window.confirm('Update the server manager from GitHub? Configuration, databases, projects, uploads, and app data will be preserved.');
       if (!confirmed) return;
 
       updateAppButton.disabled = true;
@@ -141,7 +141,28 @@ async function bootDashboard() {
         reportGlobalError(error, 'Dashboard update');
       } finally {
         updateAppButton.disabled = false;
-        updateAppButton.textContent = '↺ Update app';
+        updateAppButton.textContent = '↺ Update manager';
+      }
+    });
+  }
+
+  // Server manager restart button
+  const restartManagerButton = document.getElementById('restartManagerButton');
+  if (restartManagerButton) {
+    restartManagerButton.addEventListener('click', async () => {
+      const confirmed = window.confirm('Restart the EKAFY server manager? The dashboard may be unavailable for a few seconds.');
+      if (!confirmed) return;
+
+      restartManagerButton.disabled = true;
+      restartManagerButton.textContent = 'Restarting…';
+      try {
+        const data = await api('/api/system/restart', { method: 'POST' });
+        showGlobalMessage(data.message || 'Server manager restart scheduled', 'success');
+        setTimeout(() => window.location.reload(), 4000);
+      } catch (error) {
+        reportGlobalError(error, 'Server manager restart');
+        restartManagerButton.disabled = false;
+        restartManagerButton.textContent = '↻ Restart manager';
       }
     });
   }

@@ -4,6 +4,9 @@ set -Eeuo pipefail
 APP_NAME="ekafy"
 APP_DIR="/srv/ekafy"
 SOURCE_DIR=""
+UPDATE_REPO_URL=""
+UPDATE_BRANCH="main"
+UPDATE_TEMP_DIR=""
 APP_USER="ekafy"
 APP_GROUP="ekafy"
 SERVICE_NAME="ekafy"
@@ -21,6 +24,7 @@ CREATE_ADMIN="yes"
 ADMIN_USERNAME="admin"
 ADMIN_PASSWORD=""
 ENABLE_SERVICE_CONTROL="true"
+UPDATE_ONLY="no"
 ENV_BACKUP_DIR="/var/backups/ekafy"
 SSL_METHOD="none"
 
@@ -52,6 +56,9 @@ Options:
   --admin-username USER       First admin username. Default: admin
   --disable-service-control   Keep systemctl controls disabled in .env
   --service-name NAME         Override the systemd service name (default: ekafy)
+  --update                    Update manager code only; preserve .env, databases, and app data
+  --repo-url URL              Git repository to clone when using --update
+  --branch NAME               Git branch to use with --repo-url. Default: main
   -h, --help                  Show this help
 
 Examples:
@@ -59,6 +66,7 @@ Examples:
   sudo bash init.sh --domain panel.example.com --ssl-email admin@example.com
   sudo bash init.sh --domain panel.example.com --skip-ssl
   sudo bash init.sh --app-dir /srv/ekafy --admin-username owner
+  sudo bash /srv/ekafy/init.sh --update --repo-url https://github.com/rangavimukthiem/serverpanel.git
 USAGE
 }
 
@@ -129,7 +137,20 @@ while [[ $# -gt 0 ]]; do
     --service-name)
       SERVICE_NAME="${2:-}"
       shift 2
-      ;;    -h|--help)
+      ;;
+    --update)
+      UPDATE_ONLY="yes"
+      shift
+      ;;
+    --repo-url)
+      UPDATE_REPO_URL="${2:-}"
+      shift 2
+      ;;
+    --branch)
+      UPDATE_BRANCH="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
       usage
       exit 0
       ;;
@@ -165,10 +186,34 @@ validate_inputs() {
   [[ "$DB_USER" =~ ^[A-Za-z0-9_]{1,32}$ ]] || fail "--db-user must contain only letters, numbers, and underscores."
   [[ "$ADMIN_USERNAME" =~ ^[A-Za-z0-9_-]{3,32}$ ]] || fail "--admin-username must be 3-32 letters, numbers, underscores, or dashes."
   [[ "$PORT" =~ ^[0-9]+$ ]] || fail "--port must be numeric."
+  [[ "$UPDATE_BRANCH" =~ ^[A-Za-z0-9._/-]{1,128}$ ]] || fail "--branch contains invalid characters."
+  [[ "$UPDATE_BRANCH" != -* && "$UPDATE_BRANCH" != *..* ]] || fail "--branch is invalid."
+
+  if [[ -n "$UPDATE_REPO_URL" ]]; then
+    [[ "$UPDATE_ONLY" == "yes" ]] || fail "--repo-url can only be used with --update."
+    [[ -z "$SOURCE_DIR" ]] || fail "Use either --repo-url or --source-dir, not both."
+    [[ "$UPDATE_REPO_URL" != -* ]] || fail "--repo-url is invalid."
+  fi
 
   if (( PORT < 1024 || PORT > 65535 )); then
     fail "--port must be between 1024 and 65535."
   fi
+}
+
+cleanup_update_temp() {
+  if [[ -n "$UPDATE_TEMP_DIR" && -d "$UPDATE_TEMP_DIR" ]]; then
+    rm -rf -- "$UPDATE_TEMP_DIR"
+  fi
+}
+
+prepare_update_source() {
+  [[ -z "$UPDATE_REPO_URL" ]] && return
+
+  UPDATE_TEMP_DIR="$(mktemp -d /tmp/ekafy-update.XXXXXXXX)"
+  trap cleanup_update_temp EXIT
+  log "Downloading branch $UPDATE_BRANCH from $UPDATE_REPO_URL"
+  git clone --depth 1 --branch "$UPDATE_BRANCH" -- "$UPDATE_REPO_URL" "$UPDATE_TEMP_DIR"
+  SOURCE_DIR="$UPDATE_TEMP_DIR"
 }
 
 prompt_secret() {
@@ -205,7 +250,7 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
 
   apt_update
-  apt-get install -y ca-certificates curl gnupg openssl rsync sudo mariadb-server
+  apt-get install -y ca-certificates curl git gnupg openssl rsync sudo mariadb-server
 
   if ! command -v node >/dev/null 2>&1; then
     log "Installing Node.js ${NODE_MAJOR}.x from NodeSource"
@@ -265,9 +310,12 @@ prepare_app_dir() {
 
   log "Syncing project files from $SOURCE_DIR to $APP_DIR"
   rsync -a \
-    --delete \
-    --delete-excluded \
-    --exclude '.git/' \
+    --exclude '.env' \
+    --exclude 'node_modules/' \
+    --exclude 'data/' \
+    --exclude 'storage/' \
+    --exclude 'uploads/' \
+    --exclude 'backups/' \
     "$SOURCE_DIR/" "$APP_DIR/"
 
   [[ -f "$APP_DIR/package.json" ]] || fail "Sync failed: missing $APP_DIR/package.json"
@@ -277,6 +325,47 @@ prepare_app_dir() {
   log "Configuring /srv directory permissions for automatic project deployment"
   mkdir -p /srv
   chown "$APP_USER:$APP_GROUP" /srv
+}
+
+update_app() {
+  [[ -d "$APP_DIR" ]] || fail "App directory does not exist: $APP_DIR"
+  [[ -f "$APP_DIR/.env" ]] || fail "Refusing update: missing $APP_DIR/.env"
+
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [[ -z "$SOURCE_DIR" ]]; then
+    SOURCE_DIR="$script_dir"
+  fi
+  SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
+
+  [[ -f "$SOURCE_DIR/package.json" ]] || fail "Missing $SOURCE_DIR/package.json"
+  [[ -f "$SOURCE_DIR/server.js" ]] || fail "Missing $SOURCE_DIR/server.js"
+
+  mkdir -p "$ENV_BACKUP_DIR"
+  local backup="$ENV_BACKUP_DIR/.env.$(date +%Y%m%d%H%M%S).bak"
+  cp "$APP_DIR/.env" "$backup"
+  chmod 600 "$backup"
+  log "Configuration backup created at $backup"
+
+  if [[ "$SOURCE_DIR" != "$APP_DIR" ]]; then
+    log "Updating manager scripts without deleting server-only files"
+    rsync -a \
+      --exclude '.env' \
+      --exclude 'node_modules/' \
+      --exclude 'data/' \
+      --exclude 'storage/' \
+      --exclude 'uploads/' \
+      --exclude 'backups/' \
+      "$SOURCE_DIR/" "$APP_DIR/"
+  else
+    log "Source is the installed Git checkout; keeping the updated files in place"
+  fi
+
+  chown -R "$APP_USER:$APP_GROUP" "$APP_DIR"
+  install_node_dependencies
+  configure_manager_sudoers
+  systemctl restart "$SERVICE_NAME"
+  log "Server manager updated. Database, .env, project files, and runtime data were preserved."
 }
 
 setup_mariadb() {
@@ -325,6 +414,8 @@ write_env() {
 HOST=${bind_host}
 PORT=${PORT}
 NODE_ENV=production
+APP_DIR=${APP_DIR}
+SERVICE_NAME=${SERVICE_NAME}
 
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -399,6 +490,25 @@ UNIT
   systemctl restart "$SERVICE_NAME"
 }
 
+configure_manager_sudoers() {
+  if [[ -f "$APP_DIR/.env" ]] && grep -Eq '^ENABLE_SERVICE_CONTROL=false([[:space:]]*)$' "$APP_DIR/.env"; then
+    log "Manager restart control remains disabled by .env"
+    return
+  fi
+
+  local systemctl_path
+  systemctl_path="$(command -v systemctl)"
+
+  log "Allowing the dashboard to restart only the configured EKAFY manager service"
+  cat > "/etc/sudoers.d/${APP_NAME}-manager" <<SUDOERS
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} restart ${SERVICE_NAME}
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} is-active --quiet ${SERVICE_NAME}
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} status ${SERVICE_NAME} --no-pager
+SUDOERS
+  chmod 440 "/etc/sudoers.d/${APP_NAME}-manager"
+  visudo -cf "/etc/sudoers.d/${APP_NAME}-manager" >/dev/null
+}
+
 configure_sudoers_for_services() {
   [[ "$ENABLE_SERVICE_CONTROL" != "true" ]] && return
 
@@ -415,6 +525,7 @@ ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start nginx, ${systemctl_path
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mysql, ${systemctl_path} stop mysql, ${systemctl_path} restart mysql, ${systemctl_path} is-active --quiet mysql
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start mariadb, ${systemctl_path} stop mariadb, ${systemctl_path} restart mariadb, ${systemctl_path} is-active --quiet mariadb
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start apache2, ${systemctl_path} stop apache2, ${systemctl_path} restart apache2, ${systemctl_path} is-active --quiet apache2
+${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} restart ${SERVICE_NAME}, ${systemctl_path} is-active --quiet ${SERVICE_NAME}, ${systemctl_path} status ${SERVICE_NAME} --no-pager
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} start *, ${systemctl_path} stop *, ${systemctl_path} restart *, ${systemctl_path} enable *, ${systemctl_path} disable *, ${systemctl_path} reset-failed *, ${systemctl_path} is-active --quiet *
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} daemon-reload
 ${APP_USER} ALL=(root) NOPASSWD: ${systemctl_path} set-property * CPUQuota=*
@@ -753,8 +864,21 @@ main() {
   require_linux
   validate_inputs
 
-  require_command apt-get
   require_command systemctl
+
+  if [[ "$UPDATE_ONLY" == "yes" ]]; then
+    require_command rsync
+    require_command npm
+    if [[ -n "$UPDATE_REPO_URL" ]]; then
+      require_command git
+      require_command mktemp
+      prepare_update_source
+    fi
+    update_app
+    return
+  fi
+
+  require_command apt-get
 
   # Prompt for Nginx/domain interactively before any package installs
   prompt_nginx_setup
@@ -767,6 +891,7 @@ main() {
   write_env
   install_node_dependencies
   write_systemd_service
+  configure_manager_sudoers
   configure_sudoers_for_services
   cleanup_nginx_sites
   configure_nginx
