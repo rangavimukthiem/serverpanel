@@ -194,10 +194,6 @@ async function getServiceActiveStatus(serviceName) {
 }
 
 function journalctlCommand(args) {
-  if (process.platform === 'win32') return { file: 'journalctl', args };
-  if (typeof process.getuid === 'function' && process.getuid() !== 0) {
-    return { file: 'sudo', args: ['-n', 'journalctl', ...args] };
-  }
   return { file: 'journalctl', args };
 }
 
