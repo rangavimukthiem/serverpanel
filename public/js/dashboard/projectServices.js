@@ -67,6 +67,11 @@ function renderServiceCards(services, projectId, canManage) {
     const name = escapeHtml(svc.service_name);
     const label = escapeHtml(svc.label || svc.service_name);
     const disabled = canManage ? '' : 'disabled';
+    const logLines = Array.isArray(svc.logs) ? svc.logs : [];
+    const logPreview = logLines.length
+      ? logLines.map((line) => `<div class="service-log-line">${escapeHtml(line)}</div>`).join('')
+      : '<div class="service-log-empty">No recent journal entries yet.</div>';
+    const logsNotice = svcsLogNotice(svc);
 
     return `
     <article class="service-card" data-project-svc="${name}">
@@ -114,8 +119,23 @@ function renderServiceCards(services, projectId, canManage) {
           </button>
         </div>` : ''}
       </div>
+
+      <details class="service-log-panel" open>
+        <summary>System log</summary>
+        <div class="service-log-output" aria-label="Recent system logs for ${name}">
+          ${logsNotice}
+          ${logPreview}
+        </div>
+      </details>
     </article>`;
   }).join('');
+}
+
+function svcsLogNotice(svc) {
+  if (svc.logsAvailable === false && svc.logsMessage) {
+    return `<p class="service-log-message">${escapeHtml(svc.logsMessage)}</p>`;
+  }
+  return '';
 }
 
 // ── Load tab ──────────────────────────────────────────────────────────────────

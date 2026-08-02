@@ -1292,6 +1292,49 @@ label {
   gap: 8px;
 }
 
+.service-log-panel {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.service-log-panel summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 10px 12px;
+  text-transform: uppercase;
+}
+
+.service-log-output {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px 12px;
+}
+
+.service-log-line {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.service-log-empty,
+.service-log-message {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .service-control-btns {
   display: flex;
   gap: 6px;

@@ -193,6 +193,40 @@ async function getServiceActiveStatus(serviceName) {
   }
 }
 
+function journalctlCommand(args) {
+  if (process.platform === 'win32') return { file: 'journalctl', args };
+  if (typeof process.getuid === 'function' && process.getuid() !== 0) {
+    return { file: 'sudo', args: ['-n', 'journalctl', ...args] };
+  }
+  return { file: 'journalctl', args };
+}
+
+async function getServiceLogs(serviceName, lines = 12) {
+  if (!isServiceControlEnabled() || process.platform === 'win32') {
+    return { available: false, message: 'Recent service logs are unavailable in this environment' };
+  }
+
+  try {
+    const cmd = journalctlCommand(['--no-pager', '-n', String(lines), '-u', serviceName]);
+    const { stdout } = await execFileAsync(cmd.file, cmd.args, { timeout: 5000 });
+    const logLines = stdout
+      .split(/\r?\n/)
+      .map((line) => String(line).trimEnd())
+      .filter(Boolean)
+      .slice(-lines);
+
+    return {
+      available: true,
+      lines: logLines
+    };
+  } catch (error) {
+    return {
+      available: false,
+      message: (error.stderr || error.message || 'Unable to read service logs').trim()
+    };
+  }
+}
+
 /**
  * Returns true when systemd knows about the unit (LoadState != not-found).
  * Uses unprivileged `systemctl show` so it works even without sudo.
@@ -483,11 +517,21 @@ async function listLinkedServices(req, res, next) {
 
     const services = await listProjectServices(projectId);
 
-    // Enrich with live status
-    const enriched = await Promise.all(services.map(async (svc) => ({
-      ...svc,
-      active: await getServiceActiveStatus(svc.service_name)
-    })));
+    // Enrich with live status and recent service logs for the project tab.
+    const enriched = await Promise.all(services.map(async (svc) => {
+      const [active, logs] = await Promise.all([
+        getServiceActiveStatus(svc.service_name),
+        getServiceLogs(svc.service_name, 12)
+      ]);
+
+      return {
+        ...svc,
+        active,
+        logs: logs.available ? logs.lines : [],
+        logsAvailable: logs.available,
+        logsMessage: logs.available ? null : logs.message
+      };
+    }));
 
     return res.json({ services: enriched });
   } catch (error) {
