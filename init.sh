@@ -273,6 +273,10 @@ create_app_user() {
     log "Creating Linux user: $APP_USER"
     useradd --system --gid "$APP_GROUP" --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
   fi
+
+  log "Adding Linux user $APP_USER to adm and systemd-journal groups"
+  usermod -aG adm "$APP_USER"
+  usermod -aG systemd-journal "$APP_USER"
 }
 
 prepare_app_dir() {
