@@ -197,7 +197,7 @@ function journalctlCommand(args) {
   return { file: 'journalctl', args };
 }
 
-async function getServiceLogs(serviceName, lines = 12) {
+async function getServiceLogs(serviceName, lines = 60) {
   if (!isServiceControlEnabled() || process.platform === 'win32') {
     return { available: false, message: 'Recent service logs are unavailable in this environment' };
   }
@@ -513,21 +513,11 @@ async function listLinkedServices(req, res, next) {
 
     const services = await listProjectServices(projectId);
 
-    // Enrich with live status and recent service logs for the project tab.
-    const enriched = await Promise.all(services.map(async (svc) => {
-      const [active, logs] = await Promise.all([
-        getServiceActiveStatus(svc.service_name),
-        getServiceLogs(svc.service_name, 12)
-      ]);
-
-      return {
-        ...svc,
-        active,
-        logs: logs.available ? logs.lines : [],
-        logsAvailable: logs.available,
-        logsMessage: logs.available ? null : logs.message
-      };
-    }));
+    // Enrich with live status only; the dedicated System Logs screen handles journal reading.
+    const enriched = await Promise.all(services.map(async (svc) => ({
+      ...svc,
+      active: await getServiceActiveStatus(svc.service_name)
+    })));
 
     return res.json({ services: enriched });
   } catch (error) {
@@ -815,6 +805,28 @@ async function linkedServiceStatus(req, res, next) {
   }
 }
 
+/**
+ * GET /api/services/logs/:name
+ */
+async function serviceLogs(req, res, next) {
+  try {
+    const serviceName = (req.params.name || '').trim();
+    const lines = Number(req.query.lines || 80);
+
+    if (!serviceName || !SERVICE_NAME_PATTERN.test(serviceName)) {
+      return res.status(400).json({ message: 'Invalid service name' });
+    }
+
+    const result = await getServiceLogs(serviceName, Number.isFinite(lines) && lines > 0 ? lines : 80);
+    return res.json({
+      service: serviceName,
+      ...result
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listServices,
   listEkafyServices,
@@ -827,5 +839,6 @@ module.exports = {
   deleteLinkedServiceUnit,
   removeLinkedService,
   controlLinkedService,
-  linkedServiceStatus
+  linkedServiceStatus,
+  serviceLogs
 };

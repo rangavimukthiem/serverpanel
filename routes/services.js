@@ -14,6 +14,7 @@ const {
   listServices,
   listEkafyServices,
   serviceStatus,
+  serviceLogs,
   controlService,
   updateEkafyServiceLimits
 } = require('../controllers/serviceController');
@@ -30,6 +31,7 @@ router.patch('/ekafy/:name/limits', requireAdmin, updateEkafyServiceLimits);
 
 // Status and control for a single global service
 router.get('/:name/status',  serviceStatus);
+router.get('/logs/:name', serviceLogs);
 router.post('/:name/:action', requireAdmin, controlService);
 
 module.exports = router;

@@ -1047,6 +1047,59 @@ label {
   white-space: nowrap;
 }
 
+/* ─── System Logs screen ──────────────────────────────────────────────────── */
+
+.logs-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.logs-selector-panel,
+.logs-view-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}
+
+.logs-selector-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.logs-select {
+  width: 100%;
+}
+
+.logs-headline {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+
+.logs-headline h4 {
+  margin: 2px 0 0;
+}
+
+.logs-output {
+  background: #09111a;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #d8f4ff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 62vh;
+  min-height: 320px;
+  overflow: auto;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+
 /* ─── Service wizard ────────────────────────────────────────────────────────── */
 
 .service-wizard {

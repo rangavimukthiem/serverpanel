@@ -8,7 +8,7 @@
 import { api } from '../shared/api.js';
 import { clearSession } from '../shared/auth.js';
 import { dashboardState } from '../dashboard/state.js';
-import { loadServices, runServiceAction, refreshServiceStatuses, saveEkafyServiceLimits } from '../dashboard/services.js';
+import { loadServices, runServiceAction, refreshServiceStatuses, saveEkafyServiceLimits, initSystemLogsView } from '../dashboard/services.js';
 import { loadProjects, bindProjectListClicks } from '../dashboard/projects.js';
 import { loadUsers } from '../dashboard/users.js';
 import { bindAdminForms } from '../dashboard/forms.js';
@@ -20,10 +20,11 @@ import { initThemeSelector } from '../shared/theme.js';
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
-const TABS = ['dashboard', 'services', 'projects', 'access'];
+const TABS = ['dashboard', 'services', 'logs', 'projects', 'access'];
 const TITLE_MAP = {
   dashboard: ['Dashboard',  'Server overview'],
   services:  ['Services',   'Systemd service controls'],
+  logs:      ['System Logs', 'Service journal viewer'],
   projects:  ['Projects',   'Deployment workspace'],
   access:    ['Users',      'Account access']
 };
@@ -69,6 +70,7 @@ function syncDashboardTabState() {
 
   // Load content when switching to these tabs
   if (activeTab === 'services')  loadServices();
+  if (activeTab === 'logs')      initSystemLogsView();
   if (activeTab === 'projects')  loadProjects();
   if (activeTab === 'access')    { loadUsers(); }
 }
@@ -124,6 +126,11 @@ async function bootDashboard() {
   const refreshBtn = document.getElementById('refreshStatusButton');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => { loadServices(); refreshServiceStatuses(); });
+  }
+
+  const refreshLogsBtn = document.getElementById('refreshLogsButton');
+  if (refreshLogsBtn) {
+    refreshLogsBtn.addEventListener('click', () => initSystemLogsView());
   }
 
   // Dashboard update button

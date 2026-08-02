@@ -52,6 +52,9 @@
         <a class="nav-link" href="#services" data-dashboard-tab="services">
           <span class="nav-icon">⬡</span> Services
         </a>
+        <a class="nav-link" href="#logs" data-dashboard-tab="logs">
+          <span class="nav-icon">◌</span> System Logs
+        </a>
         <a class="nav-link" href="#projects" data-dashboard-tab="projects">
           <span class="nav-icon">◧</span> Projects
         </a>
@@ -255,6 +258,45 @@
           </section>
         </div>
         <p id="serviceMessage" class="message" role="status"></p>
+      </section>
+
+      <!-- ── System Logs tab ─────────────────────────────────────────── -->
+      <section id="logs" class="panel-section" data-dashboard-screen="logs" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Service journal</p>
+            <h3>System Logs</h3>
+          </div>
+          <button id="refreshLogsButton" class="ghost-button" type="button">↻ Refresh</button>
+        </div>
+
+        <div class="logs-layout">
+          <aside class="logs-selector-panel">
+            <label class="wizard-field">
+              <span>Service</span>
+              <select id="systemLogServiceSelect" class="logs-select"></select>
+            </label>
+            <label class="wizard-field">
+              <span>Scope</span>
+              <select id="systemLogScopeSelect" class="logs-select">
+                <option value="global">Host services</option>
+                <option value="project">Project services</option>
+                <option value="all">All services</option>
+              </select>
+            </label>
+            <p class="muted-text">Select any host service, project service, Nginx, database, SSL, or EKAFY-linked unit to inspect the latest journal output.</p>
+          </aside>
+
+          <section class="logs-view-panel">
+            <div class="logs-headline">
+              <div>
+                <p class="eyebrow" id="logTargetLabel">Target</p>
+                <h4 id="logTargetName">No service selected</h4>
+              </div>
+            </div>
+            <pre id="systemLogOutput" class="logs-output">Select a service to show its recent system logs.</pre>
+          </section>
+        </div>
       </section>
 
       <!-- ── Projects tab ───────────────────────────────────────────── -->

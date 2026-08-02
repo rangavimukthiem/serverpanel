@@ -206,6 +206,134 @@ function renderEmptyServices(message) {
   return `<p class="message">${escapeHtml(message)}</p>`;
 }
 
+function getLogIdentity(svc) {
+  return {
+    name: svc.name || svc.service_name || svc.label || 'Unknown service',
+    label: svc.label || svc.name || svc.service_name || 'Unknown service',
+    scope: svc.scope || 'global',
+    project: svc.project || null
+  };
+}
+
+async function loadSystemLogServiceCatalog() {
+  const [globalData, ekafyData] = await Promise.all([
+    api('/api/services'),
+    api('/api/services/ekafy')
+  ]);
+
+  const globalServices = (globalData.services || []).map((svc) => ({
+    name: svc.name,
+    label: svc.label || svc.name,
+    scope: 'global',
+    type: 'host'
+  }));
+
+  const projectServices = (ekafyData.services || []).map((svc) => ({
+    name: svc.name,
+    label: svc.label || svc.name,
+    scope: 'project',
+    projectName: svc.project?.name || svc.project_name || 'Project',
+    projectSlug: svc.project?.slug || svc.project_slug || '',
+    type: 'project'
+  }));
+
+  return [...globalServices, ...projectServices];
+}
+
+function fillSystemLogSelect(options, scopeFilter = 'all') {
+  const select = document.getElementById('systemLogServiceSelect');
+  if (!select) return;
+
+  const filtered = options.filter((option) => {
+    if (scopeFilter === 'all') return true;
+    return option.scope === scopeFilter;
+  });
+
+  const currentValue = select.value;
+  const currentOptions = filtered.map((option) => {
+    const label = option.scope === 'project'
+      ? `${option.label} (${option.projectName || 'Project'})`
+      : `${option.label} (${option.type || 'host'})`;
+    return `<option value="${escapeHtml(option.name)}" data-scope="${escapeHtml(option.scope)}">${escapeHtml(label)}</option>`;
+  }).join('');
+
+  select.innerHTML = currentOptions;
+
+  if (currentValue) {
+    const desired = Array.from(select.options).find((opt) => opt.value === currentValue);
+    if (desired) select.value = currentValue;
+  }
+
+  if (!select.value && select.options.length) {
+    select.value = select.options[0].value;
+  }
+}
+
+function updateSystemLogTargetLabel(serviceName) {
+  const labelEl = document.getElementById('logTargetLabel');
+  const nameEl = document.getElementById('logTargetName');
+  if (labelEl) labelEl.textContent = 'Target';
+  if (nameEl) nameEl.textContent = serviceName || 'No service selected';
+}
+
+async function loadSystemLogOutput(serviceName) {
+  const outputEl = document.getElementById('systemLogOutput');
+  if (!outputEl) return;
+
+  outputEl.textContent = `Loading logs for ${serviceName}…`;
+  try {
+    const data = await api(`/api/services/logs/${encodeURIComponent(serviceName)}`);
+    const lines = Array.isArray(data.lines) && data.lines.length
+      ? data.lines.join('\n')
+      : data.message || 'No recent journal entries yet.';
+    outputEl.textContent = lines;
+    updateSystemLogTargetLabel(serviceName);
+  } catch (error) {
+    reportGlobalError(error, `Loading ${serviceName} logs`);
+    outputEl.textContent = error.message || 'Unable to load service logs.';
+  }
+}
+
+export async function initSystemLogsView() {
+  const select = document.getElementById('systemLogServiceSelect');
+  const scopeSelect = document.getElementById('systemLogScopeSelect');
+  const outputEl = document.getElementById('systemLogOutput');
+  if (!select || !outputEl) return;
+
+  try {
+    const services = await loadSystemLogServiceCatalog();
+    const scopeValue = scopeSelect?.value || 'all';
+    fillSystemLogSelect(services, scopeValue);
+    if (!services.length) {
+      outputEl.textContent = 'No services are available to inspect.';
+      updateSystemLogTargetLabel('');
+      return;
+    }
+
+    select.onchange = () => {
+      const serviceName = select.value;
+      if (serviceName) loadSystemLogOutput(serviceName);
+    };
+
+    if (scopeSelect) {
+      scopeSelect.onchange = () => {
+        fillSystemLogSelect(services, scopeSelect.value);
+        const serviceName = select.value;
+        if (serviceName) loadSystemLogOutput(serviceName);
+      };
+    }
+
+    const activeService = select.value || services[0]?.name;
+    updateSystemLogTargetLabel(activeService || '');
+    if (activeService) {
+      await loadSystemLogOutput(activeService);
+    }
+  } catch (error) {
+    reportGlobalError(error, 'Loading system logs');
+    outputEl.textContent = error.message || 'Unable to load system log inventory.';
+  }
+}
+
 export async function loadServices() {
   const globalGrid = document.getElementById('servicesGrid');
   const ekafyGrid = document.getElementById('ekafyServicesGrid');
