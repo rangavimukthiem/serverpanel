@@ -197,13 +197,35 @@ function journalctlCommand(args) {
   return { file: 'journalctl', args };
 }
 
+function normalizeJournalErrorMessage(error) {
+  const details = [error?.stderr, error?.stdout, error?.message]
+    .filter(Boolean)
+    .map((value) => String(value).trim())
+    .filter(Boolean)
+    .join('\n');
+
+  if (!details) return 'Unable to read service logs';
+
+  const lowered = details.toLowerCase();
+  if (
+    lowered.includes('no journal files were opened due to insufficient permissions') ||
+    lowered.includes('systemd-journal') ||
+    lowered.includes('users in groups') ||
+    lowered.includes('a password is required')
+  ) {
+    return 'Journal access is restricted. Add the EKAFY process user to the adm/systemd-journal group, or grant passwordless journal access on this host.';
+  }
+
+  return details;
+}
+
 async function getServiceLogs(serviceName, lines = 60) {
   if (!isServiceControlEnabled() || process.platform === 'win32') {
     return { available: false, message: 'Recent service logs are unavailable in this environment' };
   }
 
   try {
-    const cmd = journalctlCommand(['--no-pager', '-n', String(lines), '-u', serviceName]);
+    const cmd = journalctlCommand(['-q', '--no-pager', '-n', String(lines), '-u', serviceName]);
     const { stdout } = await execFileAsync(cmd.file, cmd.args, { timeout: 5000 });
     const logLines = stdout
       .split(/\r?\n/)
@@ -218,7 +240,7 @@ async function getServiceLogs(serviceName, lines = 60) {
   } catch (error) {
     return {
       available: false,
-      message: (error.stderr || error.message || 'Unable to read service logs').trim()
+      message: normalizeJournalErrorMessage(error)
     };
   }
 }
