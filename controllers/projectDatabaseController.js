@@ -57,9 +57,19 @@ const BLOCKED_PATTERNS = [
   /CALL\b/i
 ];
 
+const ALLOWED_SET_STATEMENT_RE = /^SET\s+FOREIGN_KEY_CHECKS\s*=\s*[01]\s*;?$/i;
+
 function validateSql(sql) {
   const trimmed = sql.trim();
   const firstWord = trimmed.split(/\s+/)[0].toUpperCase();
+
+  // Keep SET blocked by default. The database manager only needs this
+  // session-scoped switch for imports and schema changes.
+  if (firstWord === 'SET') {
+    return ALLOWED_SET_STATEMENT_RE.test(trimmed)
+      ? null
+      : `SQL statement starting with "SET" is not allowed.`;
+  }
 
   if (!ALLOWED_STATEMENT_PREFIXES.has(firstWord)) {
     return `SQL statement starting with "${firstWord}" is not allowed.`;
