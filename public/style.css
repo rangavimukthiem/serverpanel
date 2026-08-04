@@ -2583,12 +2583,23 @@ label {
 
 .excel-import-option {
   align-items: center;
+  align-self: center;
+  color: var(--muted);
+  cursor: pointer;
   display: flex;
-  gap: 8px;
+  font-size: 0.78rem;
+  gap: 6px;
+  justify-self: start;
+  line-height: 1.2;
+  padding: 0 2px;
+  white-space: nowrap;
+  width: auto;
 }
 
 .excel-import-option input {
   flex: 0 0 auto;
+  height: 14px;
+  margin: 0;
   width: auto;
 }
 

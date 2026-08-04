@@ -37,6 +37,10 @@ function readPositiveIntegerEnv(name, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
+function readMultipartBoolean(value) {
+  return ['1', 'true', 'on', 'yes'].includes(String(value || '').trim().toLowerCase());
+}
+
 // ─── SQL statement allowlist ───────────────────────────────────────────────────
 
 const ALLOWED_STATEMENT_PREFIXES = new Set([
@@ -828,7 +832,7 @@ async function importSpreadsheet(req, res, next) {
     const tableName = String(req.body.tableName || '').trim();
     const sheetName = String(req.body.sheetName || '').trim();
     const headerRowNumber = Number.parseInt(req.body.headerRow || '1', 10);
-    const disableForeignKeyChecks = req.body.disableForeignKeyChecks === 'true';
+    const disableForeignKeyChecks = readMultipartBoolean(req.body.disableForeignKeyChecks);
 
     if (!req.file) {
       throw new AppError('Excel .xlsx file is required.', 400, 'DB_IMPORT_FILE_REQUIRED');
@@ -919,12 +923,23 @@ async function importSpreadsheet(req, res, next) {
     }
 
     let insertedRows = 0;
-    if (disableForeignKeyChecks) {
-      await conn.query('SET FOREIGN_KEY_CHECKS=0');
-    }
+    await conn.beginTransaction();
     try {
-      await conn.beginTransaction();
       try {
+        if (disableForeignKeyChecks) {
+          await conn.query('SET SESSION FOREIGN_KEY_CHECKS=0');
+          const settingRows = await conn.query(
+            'SELECT @@SESSION.FOREIGN_KEY_CHECKS AS foreignKeyChecks'
+          );
+          if (Number(settingRows[0]?.foreignKeyChecks) !== 0) {
+            throw new AppError(
+              'MariaDB did not disable foreign-key checks for the import connection.',
+              400,
+              'DB_IMPORT_FOREIGN_KEY_SETTING_FAILED'
+            );
+          }
+        }
+
         insertedRows = await insertImportRows(conn, tableName, mapping, rows);
         await conn.commit();
       } catch (error) {
@@ -933,7 +948,7 @@ async function importSpreadsheet(req, res, next) {
       }
     } finally {
       if (disableForeignKeyChecks) {
-        await conn.query('SET FOREIGN_KEY_CHECKS=1').catch(() => {});
+        await conn.query('SET SESSION FOREIGN_KEY_CHECKS=1').catch(() => {});
       }
     }
 

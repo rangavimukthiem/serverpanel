@@ -472,9 +472,9 @@
                     accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
                   <input id="excelSheetName" type="text" placeholder="Sheet name (optional)">
                   <input id="excelHeaderRow" type="number" min="1" max="1000" value="1" aria-label="Header row">
-                  <label class="excel-import-option">
+                  <label class="excel-import-option" title="Allows rows whose referenced parent records do not exist">
                     <input id="excelDisableForeignKeys" type="checkbox">
-                    Disable foreign-key checks for this import
+                    Ignore foreign-key constraints
                   </label>
                   <button id="previewExcelImport" class="ghost-button" type="button">Preview</button>
                   <button id="runExcelImport" type="submit">Import</button>
