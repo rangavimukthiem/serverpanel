@@ -257,6 +257,7 @@ async function submitExcelImport(project, form, mode) {
   const file = form.querySelector('#excelImportFile')?.files?.[0];
   const headerRow = form.querySelector('#excelHeaderRow')?.value || '1';
   const sheetName = form.querySelector('#excelSheetName')?.value.trim() || '';
+  const disableForeignKeyChecks = Boolean(form.querySelector('#excelDisableForeignKeys')?.checked);
 
   if (!tableName) {
     renderImportMessage('error', 'Select the target database table first.');
@@ -280,7 +281,9 @@ async function submitExcelImport(project, form, mode) {
     const confirmed = await confirmDialog({
       eyebrow: 'Database import',
       title: 'Import Excel rows?',
-      message: `Import rows from "${file.name}" into table "${tableName}"? Only the previewed mapped columns will be inserted.`,
+      message: disableForeignKeyChecks
+        ? `Import rows from "${file.name}" into table "${tableName}" with foreign-key checks temporarily disabled? This can create rows that reference missing records.`
+        : `Import rows from "${file.name}" into table "${tableName}"? Only the previewed mapped columns will be inserted.`,
       confirmLabel: 'Import Rows',
       variant: 'success'
     });
@@ -295,6 +298,7 @@ async function submitExcelImport(project, form, mode) {
   formData.append('file', file);
   if (mode === 'import') {
     formData.append('mapping', JSON.stringify(lastImportPreview.suggestedMapping));
+    formData.append('disableForeignKeyChecks', String(disableForeignKeyChecks));
   }
 
   setExcelImportBusy(form, true);

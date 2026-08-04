@@ -807,6 +807,7 @@ async function runQuery(req, res, next) {
  *   sheetName  - optional worksheet name
  *   headerRow  - header row number, defaults to 1
  *   mapping    - optional JSON mapping from Excel headers to DB columns
+ *   disableForeignKeyChecks - true to disable FK checks only for this import connection
  */
 async function importSpreadsheet(req, res, next) {
   let conn;
@@ -827,6 +828,7 @@ async function importSpreadsheet(req, res, next) {
     const tableName = String(req.body.tableName || '').trim();
     const sheetName = String(req.body.sheetName || '').trim();
     const headerRowNumber = Number.parseInt(req.body.headerRow || '1', 10);
+    const disableForeignKeyChecks = req.body.disableForeignKeyChecks === 'true';
 
     if (!req.file) {
       throw new AppError('Excel .xlsx file is required.', 400, 'DB_IMPORT_FILE_REQUIRED');
@@ -917,13 +919,22 @@ async function importSpreadsheet(req, res, next) {
     }
 
     let insertedRows = 0;
-    await conn.beginTransaction();
+    if (disableForeignKeyChecks) {
+      await conn.query('SET FOREIGN_KEY_CHECKS=0');
+    }
     try {
-      insertedRows = await insertImportRows(conn, tableName, mapping, rows);
-      await conn.commit();
-    } catch (error) {
-      await conn.rollback().catch(() => {});
-      throw error;
+      await conn.beginTransaction();
+      try {
+        insertedRows = await insertImportRows(conn, tableName, mapping, rows);
+        await conn.commit();
+      } catch (error) {
+        await conn.rollback().catch(() => {});
+        throw error;
+      }
+    } finally {
+      if (disableForeignKeyChecks) {
+        await conn.query('SET FOREIGN_KEY_CHECKS=1').catch(() => {});
+      }
     }
 
     await createLog({
@@ -940,6 +951,7 @@ async function importSpreadsheet(req, res, next) {
       tableName,
       selectedSheet: worksheet.name,
       columns: mapping.map((item) => item.column),
+      foreignKeyChecksDisabled: disableForeignKeyChecks,
       warnings
     });
   } catch (error) {

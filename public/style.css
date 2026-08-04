@@ -2581,6 +2581,17 @@ label {
   width: 100%;
 }
 
+.excel-import-option {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.excel-import-option input {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 .excel-import-output {
   display: grid;
   gap: 12px;
