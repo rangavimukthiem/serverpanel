@@ -41,6 +41,11 @@ function readMultipartBoolean(value) {
   return ['1', 'true', 'on', 'yes'].includes(String(value || '').trim().toLowerCase());
 }
 
+function isMultipartBoolean(value) {
+  return ['0', '1', 'false', 'true', 'off', 'on', 'no', 'yes']
+    .includes(String(value || '').trim().toLowerCase());
+}
+
 // ─── SQL statement allowlist ───────────────────────────────────────────────────
 
 const ALLOWED_STATEMENT_PREFIXES = new Set([
@@ -832,6 +837,13 @@ async function importSpreadsheet(req, res, next) {
     const tableName = String(req.body.tableName || '').trim();
     const sheetName = String(req.body.sheetName || '').trim();
     const headerRowNumber = Number.parseInt(req.body.headerRow || '1', 10);
+    if (mode === 'import' && !isMultipartBoolean(req.body.disableForeignKeyChecks)) {
+      throw new AppError(
+        'The Excel import page is out of date. Hard-refresh the browser and restart the server before retrying.',
+        409,
+        'DB_IMPORT_CLIENT_OUTDATED'
+      );
+    }
     const disableForeignKeyChecks = readMultipartBoolean(req.body.disableForeignKeyChecks);
 
     if (!req.file) {
