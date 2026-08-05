@@ -250,7 +250,7 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
 
   apt_update
-  apt-get install -y ca-certificates curl git gnupg openssl rsync sudo mariadb-server
+  apt-get install -y ca-certificates curl git gnupg openssl rclone rsync sudo mariadb-server
 
   if ! command -v node >/dev/null 2>&1; then
     log "Installing Node.js ${NODE_MAJOR}.x from NodeSource"

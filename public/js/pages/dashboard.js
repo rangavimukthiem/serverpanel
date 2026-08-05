@@ -17,15 +17,17 @@ import { initProjectDetail } from '../dashboard/projectDetail.js';
 import { loadStatus, handleStatusError } from '../dashboard/status.js';
 import { reportGlobalError, showGlobalMessage } from '../shared/errors.js';
 import { initThemeSelector } from '../shared/theme.js';
+import { initBackups, loadBackups } from '../dashboard/backups.js';
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
-const TABS = ['dashboard', 'services', 'logs', 'projects', 'access'];
+const TABS = ['dashboard', 'services', 'logs', 'projects', 'backups', 'access'];
 const TITLE_MAP = {
   dashboard: ['Dashboard',  'Server overview'],
   services:  ['Services',   'Systemd service controls'],
   logs:      ['System Logs', 'Service journal viewer'],
   projects:  ['Projects',   'Deployment workspace'],
+  backups:   ['Backups & Restore', 'Project recovery policies'],
   access:    ['Users',      'Account access']
 };
 
@@ -47,7 +49,7 @@ function normalizeDashboardTab(value) {
 function syncDashboardTabState() {
   let activeTab = normalizeDashboardTab(window.location.hash.replace('#', '') || 'dashboard');
 
-  if (activeTab === 'access' && dashboardState.user?.role !== 'admin') {
+  if (['access', 'backups'].includes(activeTab) && dashboardState.user?.role !== 'admin') {
     window.location.hash = '#dashboard';
     activeTab = 'dashboard';
   }
@@ -72,6 +74,7 @@ function syncDashboardTabState() {
   if (activeTab === 'services')  loadServices();
   if (activeTab === 'logs')      initSystemLogsView();
   if (activeTab === 'projects')  loadProjects();
+  if (activeTab === 'backups')   loadBackups();
   if (activeTab === 'access')    { loadUsers(); }
 }
 
@@ -222,6 +225,7 @@ async function bootDashboard() {
   initDashboardModule('Project list', bindProjectListClicks);
   initDashboardModule('Project detail', initProjectDetail);
   initDashboardModule('Admin forms', bindAdminForms);
+  initDashboardModule('Backups', initBackups);
 
   // Initial data load
   await loadProjects();

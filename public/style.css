@@ -752,6 +752,13 @@ textarea::placeholder {
   font-weight: 700;
 }
 
+.backup-rule-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+.backup-rule-fields { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.backup-options { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0; }
+.backup-options label { align-items: center; display: flex; gap: 7px; }
+.backup-rule-footer { align-items: center; color: var(--muted); display: flex; justify-content: space-between; }
+#backupSummary code { display: block; margin-top: 8px; }
+
 label {
   color: var(--muted);
   display: grid;

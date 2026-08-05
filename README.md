@@ -260,6 +260,8 @@ ALLOW_REGISTRATION=false
 
 ENABLE_SERVICE_CONTROL=true
 PROJECTS_ROOT=/srv
+BACKUP_ROOT=/srv/ekafy/backups
+GOOGLE_DRIVE_REMOTE=
 SERVER_IP=your.public.server.ip
 
 SSL_EMAIL=admin@example.com
@@ -275,6 +277,36 @@ Important notes:
 - `SERVER_IP` is optional. If set, the dashboard shows it instead of auto-detected network IPs.
 - `DB_ADMIN_*` is used for privileged database provisioning and cleanup.
 - Normal app database access should use `DB_*`.
+
+### Backups and restore
+
+The admin-only **Backups & Restore** screen defines a rule for each project. Rules
+can include project files, the provisioned MariaDB database, or both. Scheduled
+jobs run inside the EKAFY process and archives are written below `BACKUP_ROOT`.
+Every restore creates a fresh local safety backup before changing project data.
+
+Google Drive replication uses `rclone`, keeping cloud credentials out of the
+EKAFY database. Configure the remote as the EKAFY service user:
+
+```bash
+sudo -u ekafy -H rclone config
+sudo -u ekafy -H rclone lsd gdrive:
+```
+
+Then set and restart:
+
+```env
+BACKUP_ROOT=/srv/ekafy/backups
+GOOGLE_DRIVE_REMOTE=gdrive:EKAFY Backups
+```
+
+```bash
+sudo install -d -o ekafy -g ekafy -m 700 /srv/ekafy/backups
+sudo systemctl restart ekafy
+```
+
+The database restore uses the project credentials stored by EKAFY. File archives
+exclude `.git`, `node_modules`, and nested `backups` directories.
 
 ## First Admin User
 

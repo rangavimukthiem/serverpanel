@@ -9,9 +9,12 @@ const systemRoutes = require('./routes/system');
 const serviceRoutes = require('./routes/services');
 const projectRoutes = require('./routes/projects');
 const userRoutes = require('./routes/users');
+const backupRoutes = require('./routes/backups');
 const { testConnection } = require('./config/db');
 const { ensureProjectSchema } = require('./models/projectModel');
 const { ensureUserAuthSchema } = require('./models/userModel');
+const { ensureBackupSchema } = require('./models/backupModel');
+const { startBackupScheduler } = require('./controllers/backupController');
 const { authenticateToken } = require('./middleware/authMiddleware');
 
 const app = express();
@@ -32,6 +35,7 @@ app.use('/api/system', authenticateToken, systemRoutes);
 app.use('/api/services', authenticateToken, serviceRoutes);
 app.use('/api/projects', authenticateToken, projectRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
+app.use('/api/backups', authenticateToken, backupRoutes);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ message: 'API route not found' });
@@ -50,9 +54,11 @@ async function start() {
   await testConnection();
   await ensureUserAuthSchema();
   await ensureProjectSchema();
+  await ensureBackupSchema();
 
   app.listen(port, host, () => {
     console.log(`EKAFY API running on http://${host}:${port}`);
+    startBackupScheduler();
   });
 }
 

@@ -58,6 +58,9 @@
         <a class="nav-link" href="#projects" data-dashboard-tab="projects">
           <span class="nav-icon">◧</span> Projects
         </a>
+        <a class="nav-link admin-only" href="#backups" data-dashboard-tab="backups">
+          <span class="nav-icon">↥</span> Backups &amp; Restore
+        </a>
         <a class="nav-link admin-only" href="#access" data-dashboard-tab="access">
           <span class="nav-icon">◎</span> Users
         </a>
@@ -655,6 +658,19 @@
       </section>
 
       <!-- ── Users tab ──────────────────────────────────────────────── -->
+      <section id="backups" class="panel-section admin-only" data-dashboard-screen="backups" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">Local snapshots and Google Drive copies</p><h3>Backups &amp; Restore</h3></div>
+          <button id="refreshBackups" class="ghost-button" type="button">↻ Refresh</button>
+        </div>
+        <div id="backupSummary" class="wizard-card"></div>
+        <div class="section-heading"><div><p class="eyebrow">Per-project policy</p><h4>Backup Rules</h4></div></div>
+        <div id="backupRules" class="backup-rule-grid"></div>
+        <div class="section-heading"><div><p class="eyebrow">Audit trail</p><h4>Backup History</h4></div></div>
+        <div id="backupHistory" class="table-panel"></div>
+        <p id="backupMessage" class="message" role="status"></p>
+      </section>
+
       <section id="access" class="panel-section admin-only" data-dashboard-screen="access" hidden>
         <div class="section-heading">
           <div>
