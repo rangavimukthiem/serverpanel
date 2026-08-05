@@ -1,11 +1,22 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { createUser, findUserByUsername, countUsers } = require('../models/userModel');
+const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
+const {
+  createUser,
+  createGoogleUser,
+  findUserByUsername,
+  findUserByGoogleSub,
+  countUsers
+} = require('../models/userModel');
 const { createLog } = require('../models/logModel');
 
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
 const ALLOWED_ROLES = new Set(['admin', 'user']);
 const AUTH_COOKIE_NAME = 'ekafy_token';
+const GOOGLE_STATE_COOKIE = 'ekafy_google_state';
+const GOOGLE_NONCE_COOKIE = 'ekafy_google_nonce';
+const GOOGLE_COOKIE_MAX_AGE = 10 * 60 * 1000;
 
 function parseDurationMs(value) {
   if (typeof value !== 'string' || !value.trim()) {
@@ -89,6 +100,146 @@ function clearAuthCookie(req, res) {
   }
 
   res.clearCookie(AUTH_COOKIE_NAME, cookieOptions);
+}
+
+function getCookie(req, name) {
+  const cookie = (req.headers.cookie || '')
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
+}
+
+function getGoogleConfig(req) {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+    `${isSecureRequest(req) ? 'https' : 'http'}://${req.get('host')}/api/auth/google/callback`;
+  return { clientId, clientSecret, redirectUri };
+}
+
+function requireGoogleConfig(req) {
+  const config = getGoogleConfig(req);
+  if (!config.clientId || !config.clientSecret) {
+    const error = new Error('Google OAuth is not configured');
+    error.status = 503;
+    throw error;
+  }
+  return config;
+}
+
+function oauthCookieOptions(req) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: isSecureRequest(req),
+    maxAge: GOOGLE_COOKIE_MAX_AGE,
+    path: '/api/auth/google'
+  };
+}
+
+function clearOauthCookies(req, res) {
+  const options = oauthCookieOptions(req);
+  delete options.maxAge;
+  res.clearCookie(GOOGLE_STATE_COOKIE, options);
+  res.clearCookie(GOOGLE_NONCE_COOKIE, options);
+}
+
+function googleAccessAllowed(email) {
+  const normalizedEmail = String(email || '').toLowerCase();
+  const allowedEmails = String(process.env.GOOGLE_OAUTH_ALLOWED_EMAILS || '')
+    .split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
+  const allowedDomains = String(process.env.GOOGLE_OAUTH_ALLOWED_DOMAINS || '')
+    .split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
+  if (!allowedEmails.length && !allowedDomains.length) return true;
+  const domain = normalizedEmail.split('@')[1] || '';
+  return allowedEmails.includes(normalizedEmail) || allowedDomains.includes(domain);
+}
+
+async function uniqueGoogleUsername(email) {
+  const localPart = String(email).split('@')[0]
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/^[_-]+|[_-]+$/g, '') || 'google_user';
+  const base = localPart.slice(0, 24).padEnd(3, '_');
+  let candidate = base;
+  for (let suffix = 1; await findUserByUsername(candidate); suffix += 1) {
+    candidate = `${base.slice(0, 27)}_${suffix}`.slice(0, 32);
+  }
+  return candidate;
+}
+
+function googleStatus(req, res) {
+  const { clientId, clientSecret } = getGoogleConfig(req);
+  return res.json({ enabled: Boolean(clientId && clientSecret) });
+}
+
+function googleStart(req, res, next) {
+  try {
+    const { clientId, clientSecret, redirectUri } = requireGoogleConfig(req);
+    const state = crypto.randomBytes(32).toString('base64url');
+    const nonce = crypto.randomBytes(32).toString('base64url');
+    const client = new OAuth2Client(clientId, clientSecret, redirectUri);
+    const options = oauthCookieOptions(req);
+    res.cookie(GOOGLE_STATE_COOKIE, state, options);
+    res.cookie(GOOGLE_NONCE_COOKIE, nonce, options);
+    return res.redirect(client.generateAuthUrl({
+      access_type: 'online',
+      scope: ['openid', 'email', 'profile'],
+      state,
+      nonce,
+      prompt: 'select_account'
+    }));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function googleCallback(req, res) {
+  try {
+    const { clientId, clientSecret, redirectUri } = requireGoogleConfig(req);
+    const expectedState = getCookie(req, GOOGLE_STATE_COOKIE);
+    const expectedNonce = getCookie(req, GOOGLE_NONCE_COOKIE);
+    clearOauthCookies(req, res);
+    if (!req.query.code || !req.query.state || req.query.state !== expectedState || !expectedNonce) {
+      throw new Error('Google sign-in state validation failed');
+    }
+
+    const client = new OAuth2Client(clientId, clientSecret, redirectUri);
+    const { tokens } = await client.getToken(String(req.query.code));
+    if (!tokens.id_token) throw new Error('Google did not return an identity token');
+    const ticket = await client.verifyIdToken({ idToken: tokens.id_token, audience: clientId });
+    const profile = ticket.getPayload();
+    if (!profile || profile.nonce !== expectedNonce || !profile.sub || !profile.email || !profile.email_verified) {
+      throw new Error('Google identity validation failed');
+    }
+    if (!googleAccessAllowed(profile.email)) throw new Error('This Google account is not allowed');
+
+    let user = await findUserByGoogleSub(profile.sub);
+    if (!user) {
+      const userCount = await countUsers();
+      if (userCount > 0 && process.env.GOOGLE_OAUTH_ALLOW_SIGNUP !== 'true') {
+        throw new Error('No linked EKAFY account exists for this Google account');
+      }
+      const username = await uniqueGoogleUsername(profile.email);
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(48).toString('base64url'), 12);
+      user = await createGoogleUser({
+        username,
+        passwordHash,
+        email: profile.email.toLowerCase(),
+        googleSub: profile.sub,
+        role: userCount === 0 ? 'admin' : 'user'
+      });
+      await createLog({ userId: user.id, action: `registered via Google as ${username}` });
+    }
+
+    const token = signToken(user);
+    setAuthCookie(req, res, token);
+    await createLog({ userId: user.id, action: `logged in with Google as ${user.username}` });
+    return res.redirect('/dashboard.html');
+  } catch (error) {
+    clearOauthCookies(req, res);
+    return res.redirect(`/login.html?oauth_error=${encodeURIComponent(error.message || 'Google sign-in failed')}`);
+  }
 }
 
 async function register(req, res, next) {
@@ -179,5 +330,8 @@ module.exports = {
   register,
   login,
   me,
-  logout
+  logout,
+  googleStatus,
+  googleStart,
+  googleCallback
 };

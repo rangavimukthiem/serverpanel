@@ -5,6 +5,18 @@ async function bootLogin() {
   const form = document.getElementById('loginForm');
   if (!form) return;
 
+  const query = new URLSearchParams(window.location.search);
+  const oauthError = query.get('oauth_error');
+  const initialMessage = document.getElementById('authMessage');
+  if (oauthError && initialMessage) initialMessage.textContent = oauthError;
+
+  api('/api/auth/google/status')
+    .then(({ enabled }) => {
+      const section = document.getElementById('googleAuthSection');
+      if (section) section.hidden = !enabled;
+    })
+    .catch(() => {});
+
   api('/api/auth/me')
     .then(() => {
       window.location.href = '/dashboard.html';

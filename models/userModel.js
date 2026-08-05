@@ -1,5 +1,37 @@
 const { query } = require('../config/db');
 
+async function ensureUserAuthSchema() {
+  const columns = [
+    { name: 'google_sub', def: 'VARCHAR(255) NULL' },
+    { name: 'email', def: 'VARCHAR(320) NULL' }
+  ];
+
+  for (const column of columns) {
+    const rows = await query(
+      `SELECT COUNT(*) AS total
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'users'
+         AND COLUMN_NAME = ?`,
+      [column.name]
+    );
+    if (Number(rows[0]?.total || 0) === 0) {
+      await query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.def}`);
+    }
+  }
+
+  const indexes = await query(
+    `SELECT COUNT(*) AS total
+     FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'users'
+       AND INDEX_NAME = 'users_google_sub_unique'`
+  );
+  if (Number(indexes[0]?.total || 0) === 0) {
+    await query('ALTER TABLE users ADD UNIQUE KEY users_google_sub_unique (google_sub)');
+  }
+}
+
 async function createUser({ username, passwordHash, role = 'user' }) {
   const result = await query(
     'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
@@ -65,6 +97,22 @@ async function findUserByUsername(username) {
   return rows[0] || null;
 }
 
+async function findUserByGoogleSub(googleSub) {
+  const rows = await query(
+    'SELECT id, username, password, role, email, google_sub, created_at FROM users WHERE google_sub = ? LIMIT 1',
+    [googleSub]
+  );
+  return rows[0] || null;
+}
+
+async function createGoogleUser({ username, passwordHash, email, googleSub, role = 'user' }) {
+  const result = await query(
+    'INSERT INTO users (username, password, role, email, google_sub) VALUES (?, ?, ?, ?, ?)',
+    [username, passwordHash, role, email, googleSub]
+  );
+  return { id: Number(result.insertId), username, role, email, google_sub: googleSub };
+}
+
 async function findUserById(id) {
   const rows = await query(
     'SELECT id, username, role, created_at FROM users WHERE id = ? LIMIT 1',
@@ -90,9 +138,12 @@ async function deleteUserById(id) {
 }
 
 module.exports = {
+  ensureUserAuthSchema,
   createUser,
+  createGoogleUser,
   listUsersWithProjects,
   findUserByUsername,
+  findUserByGoogleSub,
   findUserById,
   countUsers,
   updateUserRole,

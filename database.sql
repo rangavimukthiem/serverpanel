@@ -8,10 +8,13 @@ CREATE TABLE IF NOT EXISTS users (
   id          INT UNSIGNED   NOT NULL AUTO_INCREMENT,
   username    VARCHAR(64)    NOT NULL,
   password    VARCHAR(255)   NOT NULL,
+  google_sub  VARCHAR(255)   NULL,
+  email       VARCHAR(320)   NULL,
   role        ENUM('admin','user') NOT NULL DEFAULT 'user',
   created_at  TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY users_username_unique (username)
+  UNIQUE KEY users_username_unique (username),
+  UNIQUE KEY users_google_sub_unique (google_sub)
 );
 
 CREATE TABLE IF NOT EXISTS logs (

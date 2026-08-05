@@ -11,6 +11,7 @@ const projectRoutes = require('./routes/projects');
 const userRoutes = require('./routes/users');
 const { testConnection } = require('./config/db');
 const { ensureProjectSchema } = require('./models/projectModel');
+const { ensureUserAuthSchema } = require('./models/userModel');
 const { authenticateToken } = require('./middleware/authMiddleware');
 
 const app = express();
@@ -47,6 +48,7 @@ app.use((err, _req, res, _next) => {
 
 async function start() {
   await testConnection();
+  await ensureUserAuthSchema();
   await ensureProjectSchema();
 
   app.listen(port, host, () => {
