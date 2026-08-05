@@ -747,13 +747,14 @@ async function listTables(req, res, next) {
 /**
  * POST /api/projects/:id/database/query
  *
- * Body: { sql }
+ * Body: { sql, disableForeignKeyChecks? }
  *
  * Executes a whitelisted SQL statement against the project's database.
  * Returns { columns, rows, affectedRows } depending on statement type.
  */
 async function runQuery(req, res, next) {
   let conn;
+  let originalForeignKeyChecks;
   try {
     const projectId = Number(req.params.id);
     if (!Number.isInteger(projectId) || projectId <= 0) {
@@ -769,15 +770,34 @@ async function runQuery(req, res, next) {
     const sql = (req.body.sql || '').trim();
     if (!sql) return res.status(400).json({ message: 'SQL statement is required' });
 
+    const disableForeignKeyChecks = req.body.disableForeignKeyChecks === true;
+    if (
+      req.body.disableForeignKeyChecks !== undefined &&
+      typeof req.body.disableForeignKeyChecks !== 'boolean'
+    ) {
+      return res.status(400).json({ message: 'disableForeignKeyChecks must be a boolean' });
+    }
+
     const validationError = validateSql(sql);
     if (validationError) return res.status(400).json({ message: validationError });
 
     conn = await getProjectDbConnection(projectId);
 
+    if (disableForeignKeyChecks) {
+      const settingRows = await conn.query(
+        'SELECT @@SESSION.FOREIGN_KEY_CHECKS AS foreignKeyChecks'
+      );
+      originalForeignKeyChecks = Number(settingRows[0]?.foreignKeyChecks);
+      await conn.query('SET SESSION FOREIGN_KEY_CHECKS=0');
+    }
+
     // mariadb driver returns an array with an OkPacket for DML or an array of rows for SELECT
     const result = await conn.query({ sql, rowsAsArray: false });
 
-    await createLog({ userId: req.user.id, action: `ran SQL on project ${project.name}` });
+    await createLog({
+      userId: req.user.id,
+      action: `ran SQL on project ${project.name}${disableForeignKeyChecks ? ' with foreign-key checks disabled' : ''}`
+    });
 
     if (Array.isArray(result)) {
       const columns = result.length > 0 ? Object.keys(result[0]) : [];
@@ -785,14 +805,16 @@ async function runQuery(req, res, next) {
         type: 'select',
         columns,
         rows: result.map((row) => Object.values(row)),
-        rowCount: result.length
+        rowCount: result.length,
+        foreignKeyChecksDisabled: disableForeignKeyChecks
       });
     }
 
     return res.json({
       type: 'dml',
       affectedRows: Number(result.affectedRows || 0),
-      insertId: result.insertId ? Number(result.insertId) : null
+      insertId: result.insertId ? Number(result.insertId) : null,
+      foreignKeyChecksDisabled: disableForeignKeyChecks
     });
   } catch (error) {
     if (error instanceof AppError) return next(error);
@@ -802,7 +824,12 @@ async function runQuery(req, res, next) {
       'DB_QUERY_FAILED'
     ));
   } finally {
-    if (conn) await conn.end().catch(() => {});
+    if (conn) {
+      if (originalForeignKeyChecks === 1) {
+        await conn.query('SET SESSION FOREIGN_KEY_CHECKS=1').catch(() => {});
+      }
+      await conn.end().catch(() => {});
+    }
   }
 }
 

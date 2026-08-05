@@ -1877,6 +1877,14 @@ label {
   tab-size: 2;
 }
 
+.sql-query-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .tables-list {
   display: flex;
   flex-wrap: wrap;

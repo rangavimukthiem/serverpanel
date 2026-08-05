@@ -194,9 +194,15 @@ function bindDatabaseActions(project) {
     fresh.addEventListener('click', async () => {
       const sql = document.getElementById('sqlEditor')?.value.trim();
       if (!sql) return;
+      const disableForeignKeyChecks = Boolean(
+        document.getElementById('sqlDisableForeignKeys')?.checked
+      );
 
       clearOutput('sqlOutput');
       writeOutput('sqlOutput', `> ${sql.split('\n')[0]}…`);
+      if (disableForeignKeyChecks) {
+        writeOutput('sqlOutput', '  Foreign-key checks bypassed for this query');
+      }
       fresh.disabled = true;
       const resultTable = document.getElementById('sqlResultTable');
       if (resultTable) resultTable.hidden = true;
@@ -204,7 +210,7 @@ function bindDatabaseActions(project) {
       try {
         const data = await api(`/api/projects/${project.id}/database/query`, {
           method: 'POST',
-          body: JSON.stringify({ sql })
+          body: JSON.stringify({ sql, disableForeignKeyChecks })
         });
 
         if (data.type === 'select') {

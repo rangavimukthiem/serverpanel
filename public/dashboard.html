@@ -487,7 +487,13 @@
                 <div class="preset-row" id="sqlPresetRow"></div>
                 <textarea id="sqlEditor" rows="7"
                   placeholder="-- Write SQL here&#10;SELECT * FROM `your_table` LIMIT 100;"></textarea>
-                <button id="runSql" type="button">▶ Run Query</button>
+                <div class="sql-query-actions">
+                  <label class="excel-import-option" title="Disables foreign-key validation only while this query runs">
+                    <input id="sqlDisableForeignKeys" type="checkbox">
+                    Bypass foreign-key checks
+                  </label>
+                  <button id="runSql" type="button">▶ Run Query</button>
+                </div>
                 <div class="terminal-output" id="sqlOutput"></div>
                 <div class="table-panel" id="sqlResultTable" hidden></div>
               </div>
