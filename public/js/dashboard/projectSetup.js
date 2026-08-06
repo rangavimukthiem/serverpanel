@@ -147,7 +147,7 @@ function bindSetupButtons(project) {
         });
         writeOutput('setupOutput', data.message, 'ok');
         writeOutput('setupOutput', `  Config: ${data.configPath}`);
-        writeOutput('setupOutput', `  Domain: ${data.domain}`);
+        writeOutput('setupOutput', `  Domains: ${(data.domains || [data.domain]).join(', ')}`);
         writeOutput('setupOutput', `  Runtime: ${data.runtime}`);
         setBadge('nginxBadge', '✓ Done', 'badge-active');
         showGlobalMessage('Nginx configuration generated and reloaded!', 'success');
@@ -174,6 +174,7 @@ function bindSetupButtons(project) {
         const data = await api(`/api/projects/${project.id}/setup/ssl`, { method: 'POST' });
         writeOutput('setupOutput', data.message, 'ok');
         writeOutput('setupOutput', `  Method: ${data.method}`);
+        if (data.domains?.length) writeOutput('setupOutput', `  Domains: ${data.domains.join(', ')}`);
         if (data.output) writeOutput('setupOutput', data.output);
         setBadge('sslBadge', '✓ SSL', 'badge-ssl');
         showGlobalMessage(`SSL certificate successfully provisioned (${data.method})!`, 'success');

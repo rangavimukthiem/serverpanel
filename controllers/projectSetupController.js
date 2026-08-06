@@ -65,6 +65,17 @@ function validateDomainName(domain) {
   return DOMAIN_PATTERN.test(domain);
 }
 
+function projectDomainNames(domain) {
+  const normalized = String(domain || '').trim().toLowerCase();
+  if (!normalized) return [];
+
+  const alternate = normalized.startsWith('www.')
+    ? normalized.slice(4)
+    : `www.${normalized}`;
+
+  return [...new Set([normalized, alternate])];
+}
+
 function normalizeRuntime(value, fallbackRuntime, legacyType) {
   if (legacyType === 'static') return 'static-site';
   if (legacyType === 'proxy') return 'node-app';
@@ -290,12 +301,13 @@ async function scaffold(req, res, next) {
  */
 function buildNginxConfig(type, { slug, domain, port, projectPath }) {
   const logDir = projectPath + '/logs';
+  const serverNames = projectDomainNames(domain).join(' ');
 
   if (type === 'static') {
     return `# EKAFY — ${slug} (static)
 server {
     listen 80;
-    server_name ${domain};
+    server_name ${serverNames};
 
     root ${projectPath}/public;
     index index.html index.htm;
@@ -314,7 +326,7 @@ server {
   return `# EKAFY — ${slug} (reverse-proxy → 127.0.0.1:${port})
 server {
     listen 80;
-    server_name ${domain};
+    server_name ${serverNames};
 
     location / {
         proxy_pass         http://127.0.0.1:${port};
@@ -403,12 +415,13 @@ function buildPhpLocations(runtime, projectPath, phpFpmSocket) {
 function buildRuntimeNginxConfig(runtime, { slug, domain, port, projectPath, phpFpmSocket }) {
   const logDir = projectPath + '/logs';
   const securityLocations = buildSecurityLocations();
+  const serverNames = projectDomainNames(domain).join(' ');
 
   if (runtime === 'static-site') {
     return `# EKAFY - ${slug} (static-site)
 server {
     listen 80;
-    server_name ${domain};
+    server_name ${serverNames};
 
     client_max_body_size 10m;
 ${buildStaticRootLocations(projectPath)}
@@ -424,7 +437,7 @@ ${securityLocations}
     return `# EKAFY - ${slug} (static frontend + API proxy -> 127.0.0.1:${port})
 server {
     listen 80;
-    server_name ${domain};
+    server_name ${serverNames};
 
     client_max_body_size 25m;
 ${securityLocations}
@@ -441,7 +454,7 @@ ${buildStaticRootLocations(projectPath)}
     return `# EKAFY - ${slug} (${runtime} -> PHP-FPM)
 server {
     listen 80;
-    server_name ${domain};
+    server_name ${serverNames};
 
     client_max_body_size 64m;
 ${securityLocations}
@@ -456,7 +469,7 @@ ${buildPhpLocations(runtime, projectPath, phpFpmSocket)}
   return `# EKAFY - ${slug} (${runtime} proxy -> 127.0.0.1:${port})
 server {
     listen 80;
-    server_name ${domain};
+    server_name ${serverNames};
 
     client_max_body_size 25m;
 ${securityLocations}
@@ -577,6 +590,7 @@ async function generateNginx(req, res, next) {
       message: 'Nginx config written and nginx reloaded',
       configPath,
       domain,
+      domains: projectDomainNames(domain),
       runtime
     });
   } catch (error) {
@@ -623,7 +637,10 @@ const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
 
     try {
       // Attempt Let's Encrypt
-      const args = ['--nginx', '-d', domain, '--non-interactive', '--agree-tos', '--redirect'];
+      const domains = projectDomainNames(domain);
+      const args = ['--nginx'];
+      domains.forEach((name) => args.push('-d', name));
+      args.push('--expand', '--non-interactive', '--agree-tos', '--redirect');
       if (email) args.push('-m', email);
       else args.push('--register-unsafely-without-email');
 
@@ -658,7 +675,8 @@ const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
         'req', '-x509', '-nodes', '-days', '365', '-newkey', 'rsa:2048',
         '-keyout', keyFile,
         '-out', certFile,
-        '-subj', `/CN=${domain}`
+        '-subj', `/CN=${domain}`,
+        '-addext', `subjectAltName=${projectDomainNames(domain).map((name) => `DNS:${name}`).join(',')}`
       ], { timeout: 20000 });
 
       output = `certbot failed (${certbotError.message}). Self-signed cert generated at ${certFile}`;
@@ -667,7 +685,7 @@ const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
     await updateProjectFields(projectId, { ssl_enabled: 1 });
     await createLog({ userId: req.user.id, action: `provisioned SSL (${method}) for project ${project.name}` });
 
-    return res.json({ message: 'SSL provisioned', method, output });
+    return res.json({ message: 'SSL provisioned', method, domains: projectDomainNames(domain), output });
   } catch (error) {
     return next(new AppError(
       `SSL provisioning failed: ${error.message}`,

@@ -465,6 +465,7 @@ code {
   display: grid;
   align-content: start;
   gap: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1582,17 +1583,32 @@ label {
 
 .projects-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: clamp(200px, 18vw, 240px) minmax(0, 1fr);
   min-height: calc(100vh - 80px);
+  min-width: 0;
 }
 
 .projects-list-pane {
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+  min-width: 0;
   overflow-y: auto;
-  padding: 22px 18px;
+  padding: 16px 12px;
+}
+
+.projects-list-pane .section-heading {
+  gap: 8px;
+}
+
+.projects-list-pane .section-heading h3 {
+  font-size: 16px;
+}
+
+.projects-list-pane #newProjectButton {
+  min-height: 32px;
+  padding: 0 10px;
 }
 
 .projects-list {
@@ -1608,8 +1624,8 @@ label {
   border-radius: var(--radius);
   cursor: pointer;
   display: grid;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 6px;
+  padding: 10px 11px;
   transition: border-color 160ms, background 160ms, transform 120ms;
 }
 
@@ -1632,8 +1648,12 @@ label {
 }
 
 .project-card-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-card-meta {
@@ -1741,9 +1761,10 @@ label {
 .detail-tab-list {
   border-bottom: 1px solid var(--line);
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
-  padding: 0 16px;
-  overflow-x: auto;
+  padding: 0 10px;
+  overflow-x: hidden;
   background: var(--panel);
 }
 
@@ -1756,7 +1777,9 @@ label {
   font-size: 13px;
   font-weight: 600;
   min-height: 44px;
-  padding: 0 16px;
+  flex: 1 1 82px;
+  min-width: 0;
+  padding: 0 10px;
   margin-bottom: -1px;
   transition: color 140ms, border-color 140ms;
 }
@@ -2503,7 +2526,7 @@ label {
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .projects-layout {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 200px minmax(0, 1fr);
   }
 
   .dashboard-detail-grid {
