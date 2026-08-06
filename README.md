@@ -4,7 +4,9 @@ EKAFY is a lightweight VPS control panel for hosting and managing projects on a 
 
 The backend is built with Express and MariaDB. The frontend is plain HTML, CSS, and JavaScript. EKAFY is designed to run behind Nginx on a VPS, usually from `/srv/ekafy`.
 
-For a route-by-route API reference, see [FUNCTIONS.md](FUNCTIONS.md).
+Start with the [EKAFY Operations Guide](DOCUMENTATION.md) for installation,
+configuration, and a section-by-section dashboard walkthrough. For a
+route-by-route API reference, see [FUNCTIONS.md](FUNCTIONS.md).
 
 ## What EKAFY Manages
 
