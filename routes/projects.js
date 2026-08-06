@@ -35,6 +35,7 @@ const {
   clone: gitClone,
   pull: gitPull,
   pullForced,
+  stash: gitStash,
   removeRemote,
   push: gitPush
 } = require('../controllers/projectGitController');
@@ -85,6 +86,7 @@ router.post('/:id/git/init', gitInit);
 router.post('/:id/git/clone', gitClone);
 router.post('/:id/git/pull', gitPull);
 router.post('/:id/git/pull/force', pullForced);
+router.post('/:id/git/stash', gitStash);
 router.post('/:id/git/remove-remote', removeRemote);
 router.post('/:id/git/push', gitPush);
 

@@ -132,6 +132,7 @@ Password is **auto-generated** and saved to `project_envs`; never returned in th
 | `/api/projects/:id/git/init` | POST | Manager | `git init` + optional remote add |
 | `/api/projects/:id/git/clone` | POST | Manager | `git clone <url>` into project path |
 | `/api/projects/:id/git/pull` | POST | Manager | `git pull origin <branch>` |
+| `/api/projects/:id/git/stash` | POST | Manager | Stash tracked and untracked changes |
 | `/api/projects/:id/git/push` | POST | Manager | `git add -A && git commit -m "<msg>" && git push` |
 
 **Init/Clone body:**

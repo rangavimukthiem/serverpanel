@@ -125,6 +125,20 @@ function bindGitActions(project) {
     }
   });
 
+  // Stash tracked and untracked changes
+  freshBind('gitStash', async () => {
+    clearOutput();
+    writeOutput('git stash push --include-untracked…');
+    try {
+      const data = await api(`/api/projects/${project.id}/git/stash`, { method: 'POST' });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git stash');
+    }
+  });
+
   // Remove remote
   freshBind('gitRemoveRemote', async () => {
     clearOutput();

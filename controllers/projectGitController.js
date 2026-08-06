@@ -247,6 +247,39 @@ async function pullForced(req, res, next) {
 }
 
 /**
+ * POST /api/projects/:id/git/stash
+ *
+ * Stashes tracked and untracked working-tree changes.
+ */
+async function stash(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+    if (!requireLinux(res)) return;
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const result = await runGit(['stash', 'push', '--include-untracked'], project.path);
+
+    await createLog({ userId: req.user.id, action: `git stash on project ${project.name}` });
+
+    return res.json({
+      message: result.ok ? 'Changes stashed' : 'Git stash encountered errors',
+      ok: result.ok,
+      output: [result.stdout, result.stderr].filter(Boolean).join('\n')
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+/**
  * POST /api/projects/:id/git/remove-remote
  *
  * Removes the configured remote from the repository.
@@ -324,4 +357,4 @@ async function push(req, res, next) {
   }
 }
 
-module.exports = { status, init, clone, pull, pullForced, removeRemote, push };
+module.exports = { status, init, clone, pull, pullForced, stash, removeRemote, push };
