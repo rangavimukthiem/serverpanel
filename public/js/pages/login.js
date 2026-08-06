@@ -1,5 +1,8 @@
 import { api } from '../shared/api.js';
 import { reportGlobalError } from '../shared/errors.js';
+import { initThemeSelector } from '../shared/theme.js';
+
+initThemeSelector();
 
 async function bootLogin() {
   const form = document.getElementById('loginForm');
@@ -10,12 +13,29 @@ async function bootLogin() {
   const initialMessage = document.getElementById('authMessage');
   if (oauthError && initialMessage) initialMessage.textContent = oauthError;
 
+  const googleButton = document.getElementById('googleAuthButton');
+  const googleMessage = document.getElementById('googleAuthMessage');
+  const setGoogleAvailability = (enabled, message = '') => {
+    if (googleButton) {
+      googleButton.setAttribute('aria-disabled', String(!enabled));
+      googleButton.tabIndex = enabled ? 0 : -1;
+    }
+    if (googleMessage) {
+      googleMessage.textContent = message;
+      googleMessage.hidden = !message;
+    }
+  };
+
+  googleButton?.addEventListener('click', (event) => {
+    if (googleButton.getAttribute('aria-disabled') === 'true') event.preventDefault();
+  });
+
   api('/api/auth/google/status')
-    .then(({ enabled }) => {
-      const section = document.getElementById('googleAuthSection');
-      if (section) section.hidden = !enabled;
-    })
-    .catch(() => {});
+    .then(({ enabled }) => setGoogleAvailability(
+      enabled,
+      enabled ? '' : 'Google sign-in has not been configured by the administrator.'
+    ))
+    .catch(() => setGoogleAvailability(false, 'Google sign-in availability could not be checked.'));
 
   api('/api/auth/me')
     .then(() => {

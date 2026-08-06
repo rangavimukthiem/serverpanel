@@ -51,7 +51,10 @@ async function ensureBackupSchema() {
 
 async function listBackupRules() {
   return query(`
-    SELECT r.*, p.id AS project_id, p.name AS project_name, p.slug AS project_slug, p.path AS project_path
+    SELECT r.id, p.id AS project_id, r.enabled, r.frequency, r.run_hour, r.run_minute,
+      r.run_weekday, r.include_files, r.include_database, r.local_retention,
+      r.google_drive_enabled, r.last_run_at, r.next_run_at, r.created_at, r.updated_at,
+      p.name AS project_name, p.slug AS project_slug, p.path AS project_path
     FROM projects p LEFT JOIN backup_rules r ON r.project_id = p.id
     ORDER BY p.name
   `);
@@ -80,7 +83,10 @@ async function saveBackupRule(projectId, rule) {
 
 async function listBackupRuns(limit = 100) {
   return query(`
-    SELECT b.*, CAST(b.id AS CHAR) AS id, CAST(b.size_bytes AS CHAR) AS size_bytes,
+    SELECT CAST(b.id AS CHAR) AS id, b.project_id, b.trigger_type, b.status,
+      b.archive_name, b.archive_path, CAST(b.size_bytes AS CHAR) AS size_bytes,
+      b.google_drive_path, b.includes_files, b.includes_database, b.error_message,
+      b.created_by, b.started_at, b.completed_at,
       p.name AS project_name, p.slug AS project_slug, u.username AS created_by_username
     FROM backup_runs b JOIN projects p ON p.id=b.project_id
     LEFT JOIN users u ON u.id=b.created_by
@@ -89,7 +95,10 @@ async function listBackupRuns(limit = 100) {
 }
 
 async function getBackupRun(id) {
-  const rows = await query('SELECT *, CAST(id AS CHAR) AS id, CAST(size_bytes AS CHAR) AS size_bytes FROM backup_runs WHERE id=? LIMIT 1', [id]);
+  const rows = await query(`SELECT CAST(id AS CHAR) AS id, project_id, trigger_type, status,
+    archive_name, archive_path, CAST(size_bytes AS CHAR) AS size_bytes, google_drive_path,
+    includes_files, includes_database, error_message, created_by, started_at, completed_at
+    FROM backup_runs WHERE id=? LIMIT 1`, [id]);
   return rows[0] || null;
 }
 
@@ -125,7 +134,9 @@ async function dueBackupRules() {
 }
 
 async function retainedRuns(projectId) {
-  return query(`SELECT *, CAST(id AS CHAR) AS id, CAST(size_bytes AS CHAR) AS size_bytes
+  return query(`SELECT CAST(id AS CHAR) AS id, project_id, trigger_type, status,
+    archive_name, archive_path, CAST(size_bytes AS CHAR) AS size_bytes, google_drive_path,
+    includes_files, includes_database, error_message, created_by, started_at, completed_at
     FROM backup_runs WHERE project_id=? AND status='completed'
     ORDER BY started_at DESC`, [projectId]);
 }
