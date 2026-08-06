@@ -257,8 +257,6 @@ async function stash(req, res, next) {
     if (!Number.isInteger(projectId) || projectId <= 0) {
       return res.status(400).json({ message: 'Invalid project id' });
     }
-    if (!requireLinux(res)) return;
-
     const project = await findProjectById(projectId);
     if (!project) return res.status(404).json({ message: 'Project not found' });
     if (!(await canManage(req.user, projectId))) {
@@ -269,10 +267,19 @@ async function stash(req, res, next) {
 
     await createLog({ userId: req.user.id, action: `git stash on project ${project.name}` });
 
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    if (!result.ok) {
+      return res.status(422).json({
+        message: output || 'Git stash failed',
+        ok: false,
+        output
+      });
+    }
+
     return res.json({
-      message: result.ok ? 'Changes stashed' : 'Git stash encountered errors',
-      ok: result.ok,
-      output: [result.stdout, result.stderr].filter(Boolean).join('\n')
+      message: 'Changes stashed',
+      ok: true,
+      output: output || 'No local changes to save'
     });
   } catch (error) {
     return next(error);
