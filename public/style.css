@@ -505,7 +505,7 @@ code {
   gap: 7px;
 }
 
-.theme-control > span {
+.theme-control>span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
@@ -650,7 +650,7 @@ textarea {
   color: var(--text);
   min-height: 38px;
   outline: none;
-  padding: 0 12px;
+  /* padding: 0 12px; */
   transition: border-color 140ms, box-shadow 140ms;
 }
 
@@ -768,12 +768,42 @@ textarea::placeholder {
   font-weight: 700;
 }
 
-.backup-rule-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
-.backup-rule-fields { display: grid; gap: 10px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.backup-options { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0; }
-.backup-options label { align-items: center; display: flex; gap: 7px; }
-.backup-rule-footer { align-items: center; color: var(--muted); display: flex; justify-content: space-between; }
-#backupSummary code { display: block; margin-top: 8px; }
+.backup-rule-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+
+.backup-rule-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.backup-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 14px 0;
+}
+
+.backup-options label {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.backup-rule-footer {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+#backupSummary code {
+  display: block;
+  margin-top: 8px;
+}
 
 label {
   color: var(--muted);
@@ -1178,7 +1208,7 @@ label {
   background: var(--panel);
   border: 1px solid rgba(45, 212, 191, 0.25);
   border-radius: var(--radius);
-  box-shadow: 0 4px 32px rgba(0,0,0,0.22);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.22);
   margin-bottom: 20px;
   padding: 20px 22px 18px;
 }
@@ -1235,7 +1265,7 @@ label {
   line-height: 1.4;
 }
 
-.mode-option input[type="radio"]:checked + .mode-card {
+.mode-option input[type="radio"]:checked+.mode-card {
   background: rgba(45, 212, 191, 0.07);
   border-color: rgba(45, 212, 191, 0.55);
 }
@@ -1266,7 +1296,7 @@ label {
   grid-column: 1 / -1;
 }
 
-.wizard-field > span {
+.wizard-field>span {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
@@ -1274,7 +1304,7 @@ label {
   text-transform: uppercase;
 }
 
-.wizard-field > span em {
+.wizard-field>span em {
   font-style: normal;
   font-weight: 400;
   opacity: 0.7;
@@ -1371,11 +1401,11 @@ label {
   width: 14px;
 }
 
-.toggle-option input[type="checkbox"]:checked + .toggle-pill {
+.toggle-option input[type="checkbox"]:checked+.toggle-pill {
   background: var(--accent);
 }
 
-.toggle-option input[type="checkbox"]:checked + .toggle-pill::after {
+.toggle-option input[type="checkbox"]:checked+.toggle-pill::after {
   transform: translateX(16px);
 }
 
@@ -1931,7 +1961,7 @@ label {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
 }
 
-.setup-inline > * {
+.setup-inline>* {
   min-width: 0;
   width: 100%;
 }
@@ -2186,20 +2216,91 @@ label {
   grid-template-columns: minmax(220px, 1fr);
 }
 
-.git-stage-actions button { flex: 1 1 135px; }
+.git-stage-actions button {
+  flex: 1 1 135px;
+}
 
-.git-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.git-summary span { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; padding: 5px 10px; }
-.git-status-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.git-status-grid section { min-width: 0; }
-.git-status-grid h5, .git-history-heading { color: var(--muted); font-size: 12px; margin: 0 0 7px; }
-.git-history-heading { margin-top: 14px; }
-.git-history { display: grid; gap: 7px; }
-.git-history-item { align-items: start; background: var(--panel-soft); border: 1px solid var(--line); border-radius: var(--radius-sm); display: grid; gap: 3px 10px; grid-template-columns: auto 1fr auto; padding: 9px 11px; }
-.git-history-hash { color: var(--accent); font-family: var(--font-mono); }
-.git-history-subject { min-width: 0; overflow-wrap: anywhere; }
-.git-history-meta { color: var(--muted); font-size: 11px; }
-@media (max-width: 720px) { .git-status-grid { grid-template-columns: 1fr; } .git-history-item { grid-template-columns: auto 1fr; } .git-history-meta { grid-column: 1 / -1; } }
+.git-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.git-summary span {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.git-status-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.git-status-grid section {
+  min-width: 0;
+}
+
+.git-status-grid h5,
+.git-history-heading {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 7px;
+}
+
+.git-history-heading {
+  margin-top: 14px;
+}
+
+.git-history {
+  display: grid;
+  gap: 7px;
+}
+
+.git-history-item {
+  align-items: start;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 3px 10px;
+  grid-template-columns: auto 1fr auto;
+  padding: 9px 11px;
+}
+
+.git-history-hash {
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.git-history-subject {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.git-history-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .git-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .git-history-item {
+    grid-template-columns: auto 1fr;
+  }
+
+  .git-history-meta {
+    grid-column: 1 / -1;
+  }
+}
 
 .git-log {
   background: var(--panel-deep);
@@ -2517,8 +2618,8 @@ label {
   min-width: 0;
 }
 
-.endpoint-row > *,
-.endpoint-table-row > * {
+.endpoint-row>*,
+.endpoint-table-row>* {
   max-width: 100%;
   min-width: 0;
 }
@@ -2661,7 +2762,7 @@ label {
     width: 100%;
   }
 
-  .theme-control > span,
+  .theme-control>span,
   .refresh-pill {
     display: none;
   }
@@ -2883,6 +2984,7 @@ label {
 }
 
 @media (max-width: 960px) {
+
   .excel-import-form,
   .import-preview-summary {
     grid-template-columns: 1fr;
