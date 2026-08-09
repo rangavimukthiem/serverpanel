@@ -87,6 +87,7 @@ All endpoints require a valid session cookie (`ekafy_token`) or `Authorization: 
 | Route | Method | Auth | Description |
 |---|---|---|---|
 | `/api/projects/:id/setup/scaffold` | POST | Manager | Create folder tree + seed .env file |
+| `/api/projects/:id/setup/directories` | POST | Manager | Create custom group-writable directories inside the project root |
 | `/api/projects/:id/setup/nginx` | POST | Manager | Generate nginx server block, enable, reload |
 | `/api/projects/:id/setup/ssl` | POST | Manager | Provision SSL with Certbot; self-signed fallback only when explicitly enabled |
 

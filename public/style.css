@@ -1936,6 +1936,16 @@ label {
   width: 100%;
 }
 
+.setup-directory-form {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  margin: -6px 0 0;
+}
+
 /* ─── Terminal output ──────────────────────────────────────────────────────── */
 .terminal-output {
   background: #060a0f;

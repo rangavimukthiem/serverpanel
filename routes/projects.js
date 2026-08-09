@@ -20,7 +20,7 @@ const {
   deleteProject
 } = require('../controllers/projectController');
 
-const { scaffold, generateNginx, provisionSsl } = require('../controllers/projectSetupController');
+const { scaffold, createCustomDirectories, generateNginx, provisionSsl } = require('../controllers/projectSetupController');
 const {
   provision,
   listTables,
@@ -70,6 +70,7 @@ router.delete('/:id/members/:userId', deleteProjectMember);
 
 // ── Setup (scaffold / nginx / ssl) ───────────────────────────────────────────
 router.post('/:id/setup/scaffold', scaffold);
+router.post('/:id/setup/directories', createCustomDirectories);
 router.post('/:id/setup/nginx', generateNginx);
 router.post('/:id/setup/ssl', provisionSsl);
 

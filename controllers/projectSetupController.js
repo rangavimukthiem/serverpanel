@@ -36,6 +36,8 @@ const PORT_RUNTIME_SET = new Set(['node-app', 'python-api', 'static-api']);
 const PHP_RUNTIME_SET = new Set(['php-site', 'wordpress-site']);
 const PHP_FPM_SOCKET_PATTERN = /^\/run\/php\/php\d+\.\d+-fpm\.sock$/;
 const DEFAULT_PHP_FPM_SOCKET = process.env.PHP_FPM_SOCKET || '/run/php/php8.1-fpm.sock';
+const CUSTOM_DIRECTORY_MODE = 0o2775;
+const MAX_CUSTOM_DIRECTORIES = 25;
 
 // ─── Access guards ────────────────────────────────────────────────────────────
 
@@ -286,6 +288,113 @@ async function scaffold(req, res, next) {
         `Permission denied creating project directory. Run: sudo mkdir -p ${error.path || '<project-path>'} && sudo chown $(whoami) ${error.path || '<project-path>'}`,
         500,
         'EACCES'
+      ));
+    }
+    return next(error);
+  }
+}
+
+function normalizeCustomDirectory(value) {
+  if (typeof value !== 'string' || value.includes('\0')) return null;
+
+  const normalized = value.trim().replace(/\\/g, '/').replace(/\/+$/g, '');
+  if (!normalized || normalized.length > 255 || path.posix.isAbsolute(normalized)) return null;
+
+  const parts = normalized.split('/');
+  if (parts.some((part) => !part || part === '.' || part === '..')) return null;
+  return parts.join('/');
+}
+
+async function assertNoSymlinkInDirectoryPath(projectRoot, relativeDirectory) {
+  let current = projectRoot;
+  for (const part of relativeDirectory.split('/')) {
+    current = path.join(current, part);
+    try {
+      const stat = await fs.lstat(current);
+      if (stat.isSymbolicLink()) {
+        throw new AppError('Custom directory path cannot pass through a symbolic link', 400, 'INVALID_DIRECTORY_PATH');
+      }
+      if (!stat.isDirectory()) {
+        throw new AppError('A file already exists in the requested directory path', 409, 'DIRECTORY_PATH_CONFLICT');
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+}
+
+/**
+ * POST /api/projects/:id/setup/directories
+ * Body: { directories: ['node_modules', 'storage/framework/cache'] }
+ *
+ * Creates manager-selected directories inside the project root. The setgid,
+ * group-writable mode lets Linux users in PROJECT_SERVICE_GROUP collaborate
+ * while ensuring new entries continue to inherit that group.
+ */
+async function createCustomDirectories(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const requested = Array.isArray(req.body?.directories)
+      ? req.body.directories
+      : [req.body?.directory];
+    if (!requested.length || requested.length > MAX_CUSTOM_DIRECTORIES) {
+      return res.status(400).json({ message: `Provide between 1 and ${MAX_CUSTOM_DIRECTORIES} directories` });
+    }
+
+    const directories = [...new Set(requested.map(normalizeCustomDirectory))];
+    if (directories.includes(null) || directories.length === 0) {
+      return res.status(400).json({
+        message: 'Directory names must be relative paths inside the project and cannot contain empty, . or .. segments'
+      });
+    }
+
+    await fs.mkdir(project.path, { recursive: true });
+    const projectRoot = await fs.realpath(project.path);
+    const created = [];
+
+    for (const relativeDirectory of directories) {
+      await assertNoSymlinkInDirectoryPath(projectRoot, relativeDirectory);
+      const fullPath = path.resolve(projectRoot, ...relativeDirectory.split('/'));
+      if (!fullPath.startsWith(`${projectRoot}${path.sep}`)) {
+        return res.status(400).json({ message: 'Directory must be inside the project root' });
+      }
+
+      await fs.mkdir(fullPath, { recursive: true, mode: CUSTOM_DIRECTORY_MODE });
+      await fs.chmod(fullPath, CUSTOM_DIRECTORY_MODE);
+      created.push({ path: fullPath, relativePath: relativeDirectory });
+    }
+
+    const serviceUser = process.env.PROJECT_SERVICE_USER || process.env.USER || 'ekafy';
+    const serviceGroup = process.env.PROJECT_SERVICE_GROUP || serviceUser;
+    await createLog({
+      userId: req.user.id,
+      action: `created custom directories for project ${project.name}: ${directories.join(', ')}`
+    });
+
+    return res.status(201).json({
+      message: `${created.length} custom director${created.length === 1 ? 'y' : 'ies'} created`,
+      directories: created,
+      owner: serviceUser,
+      group: serviceGroup,
+      mode: '2775'
+    });
+  } catch (error) {
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      return next(new AppError(
+        `Permission denied creating or updating ${error.path || 'the custom directory'}`,
+        500,
+        'DIRECTORY_PERMISSION_DENIED'
       ));
     }
     return next(error);
@@ -695,4 +804,4 @@ const email = process.env.SSL_EMAIL || process.env.ADMIN_EMAIL || '';
   }
 }
 
-module.exports = { scaffold, generateNginx, provisionSsl };
+module.exports = { scaffold, createCustomDirectories, generateNginx, provisionSsl };

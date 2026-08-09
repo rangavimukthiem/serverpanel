@@ -112,6 +112,46 @@ function bindSetupButtons(project) {
     });
   }
 
+  // Custom dependency/cache directories
+  const directoryBtn = document.getElementById('createCustomDirectories');
+  if (directoryBtn) {
+    const fresh = directoryBtn.cloneNode(true);
+    directoryBtn.replaceWith(fresh);
+    fresh.addEventListener('click', async () => {
+      const input = document.getElementById('customDirectories');
+      const directories = (input?.value || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+      if (!directories.length) {
+        writeOutput('setupOutput', '✗ Enter at least one directory path', 'err');
+        return;
+      }
+
+      clearOutput('setupOutput');
+      fresh.disabled = true;
+      writeOutput('setupOutput', 'Creating custom project directories…', 'info');
+      try {
+        const data = await api(`/api/projects/${project.id}/setup/directories`, {
+          method: 'POST',
+          body: JSON.stringify({ directories })
+        });
+        writeOutput('setupOutput', data.message, 'ok');
+        data.directories?.forEach((directory) => {
+          writeOutput('setupOutput', `  ✓ ${directory.path} (${data.owner}:${data.group} ${data.mode})`);
+        });
+        if (input) input.value = '';
+        showGlobalMessage('Custom directories created successfully!', 'success');
+      } catch (err) {
+        writeOutput('setupOutput', `✗ ${err.message}`, 'err');
+        reportGlobalError(err, 'Create directories');
+      } finally {
+        fresh.disabled = false;
+      }
+    });
+  }
+
   // Nginx
   const nginxBtn = document.getElementById('runNginx');
   if (nginxBtn) {

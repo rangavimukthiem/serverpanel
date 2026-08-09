@@ -393,6 +393,11 @@
                     <span class="status-badge" id="scaffoldBadge">—</span>
                   </div>
                   <button id="runScaffold" type="button">Run Scaffold</button>
+                  <div class="inline-form setup-directory-form">
+                    <input id="customDirectories" type="text" maxlength="1000" placeholder="node_modules, vendor, storage/cache">
+                    <button id="createCustomDirectories" type="button">Create Directories</button>
+                  </div>
+                  <p class="field-help">Comma-separated paths, relative to the project root. Directories use group-writable <code>2775</code> permissions and inherit the EKAFY service group.</p>
                 </div>
 
                 <div class="setup-step">
