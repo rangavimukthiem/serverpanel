@@ -19,6 +19,7 @@ const { AppError } = require('../errors/AppError');
 const execFileAsync = promisify(execFile);
 
 const GIT_TIMEOUT = 30000; // 30 s — network ops (clone/pull/push) may need this
+const GIT_HISTORY_LIMIT = 10;
 
 // ─── Access ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ async function runGit(args, cwd) {
 /**
  * GET /api/projects/:id/git/status
  *
- * Returns `git status --short` and the last 15 commit log lines.
+ * Returns working-tree/staging status, remotes, current branch and recent history.
  */
 async function status(req, res, next) {
   try {
@@ -72,19 +73,116 @@ async function status(req, res, next) {
       Boolean(await getProjectMembership(projectId, req.user.id));
     if (!canView) return res.status(403).json({ message: 'Project access required' });
 
-    const [statusResult, logResult, branchResult] = await Promise.all([
-      runGit(['status', '--short'], project.path),
-      runGit(['log', '--oneline', '-15'], project.path),
-      runGit(['rev-parse', '--abbrev-ref', 'HEAD'], project.path)
+    const [statusResult, logResult, branchResult, remoteResult, stagedResult, unstagedResult] = await Promise.all([
+      runGit(['status', '--short', '--branch'], project.path),
+      runGit(['log', `-${GIT_HISTORY_LIMIT}`, '--date=short', '--pretty=format:%h%x1f%ad%x1f%an%x1f%s'], project.path),
+      runGit(['branch', '--show-current'], project.path),
+      runGit(['remote', '-v'], project.path),
+      runGit(['diff', '--cached', '--name-status'], project.path),
+      runGit(['diff', '--name-status'], project.path)
     ]);
 
+    const statusLines = statusResult.stdout.split('\n').filter(Boolean);
+    const history = logResult.ok && logResult.stdout
+      ? logResult.stdout.split('\n').map((line) => {
+        const [hash, date, author, ...subject] = line.split('\x1f');
+        return { hash, date, author, subject: subject.join('\x1f') };
+      })
+      : [];
+
     return res.json({
-      status: statusResult.stdout,
-      log: logResult.stdout,
+      status: statusLines.filter((line) => !line.startsWith('## ')).join('\n'),
+      tracking: statusLines.find((line) => line.startsWith('## '))?.slice(3) || '',
+      staged: stagedResult.stdout,
+      unstaged: unstagedResult.stdout,
+      log: history.map((entry) => `${entry.hash} ${entry.subject}`).join('\n'),
+      history,
       branch: branchResult.stdout || project.git_branch,
+      remotes: remoteResult.stdout,
       repoUrl: project.git_repo_url,
       hasRepo: statusResult.ok
     });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function runWorkingTreeOperation(req, res, next, operation) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+    if (!requireLinux(res)) return;
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const definitions = {
+      stage: { args: ['add', '-A'], success: 'All changes staged', label: 'git add -A' },
+      unstage: { args: ['reset', 'HEAD', '--', '.'], success: 'All changes unstaged', label: 'git reset HEAD' },
+      fetch: { args: ['fetch', '--all', '--prune'], success: 'Remote references updated', label: 'git fetch --all --prune' }
+    };
+    const definition = definitions[operation];
+    let args = definition.args;
+    if (operation === 'unstage') {
+      const hasHead = await runGit(['rev-parse', '--verify', 'HEAD'], project.path);
+      if (!hasHead.ok) args = ['rm', '--cached', '-r', '--ignore-unmatch', '.'];
+    }
+    const result = await runGit(args, project.path);
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+
+    await createLog({ userId: req.user.id, action: `${definition.label} on project ${project.name}` });
+    if (!result.ok) {
+      return res.status(422).json({ message: output || `${definition.label} failed`, ok: false, output });
+    }
+    return res.json({ message: definition.success, ok: true, output });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function stage(req, res, next) {
+  return runWorkingTreeOperation(req, res, next, 'stage');
+}
+
+function unstage(req, res, next) {
+  return runWorkingTreeOperation(req, res, next, 'unstage');
+}
+
+function fetchRemotes(req, res, next) {
+  return runWorkingTreeOperation(req, res, next, 'fetch');
+}
+
+async function commit(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+    if (!requireLinux(res)) return;
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    if (!message || message.length > 500) {
+      return res.status(400).json({ message: 'Commit message is required and must be at most 500 characters' });
+    }
+
+    const result = await runGit(['commit', '-m', message], project.path);
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    await createLog({ userId: req.user.id, action: `git commit on project ${project.name}: "${message}"` });
+    if (!result.ok) {
+      return res.status(422).json({ message: output || 'Git commit failed', ok: false, output });
+    }
+    return res.json({ message: 'Commit created', ok: true, output });
   } catch (error) {
     return next(error);
   }
@@ -364,4 +462,17 @@ async function push(req, res, next) {
   }
 }
 
-module.exports = { status, init, clone, pull, pullForced, stash, removeRemote, push };
+module.exports = {
+  status,
+  init,
+  clone,
+  pull,
+  pullForced,
+  fetchRemotes,
+  stage,
+  unstage,
+  commit,
+  stash,
+  removeRemote,
+  push
+};

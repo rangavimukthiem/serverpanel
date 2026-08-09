@@ -20,17 +20,61 @@ function clearOutput() {
 
 async function loadGitStatus(project) {
   const pre = document.getElementById('gitStatusOut');
+  const remotes = document.getElementById('gitRemotesOut');
+  const summary = document.getElementById('gitSummary');
+  const history = document.getElementById('gitHistory');
   if (!pre) return;
   pre.textContent = 'Loading…';
+  if (remotes) remotes.textContent = 'Loading…';
+  if (history) history.innerHTML = '';
   try {
     const data = await api(`/api/projects/${project.id}/git/status`);
-    let text = '';
-    if (data.branch) text += `Branch: ${data.branch}\n\n`;
-    if (data.status) text += `--- Status ---\n${data.status}\n\n`;
-    if (data.log) text += `--- Log ---\n${data.log}`;
-    pre.textContent = text || 'Repository is clean.';
+    if (!data.hasRepo) throw new Error('No repository');
+
+    const stagedCount = data.staged ? data.staged.split('\n').filter(Boolean).length : 0;
+    const unstagedCount = data.unstaged ? data.unstaged.split('\n').filter(Boolean).length : 0;
+    const untrackedCount = data.status
+      ? data.status.split('\n').filter((line) => line.startsWith('??')).length
+      : 0;
+    const currentStage = stagedCount
+      ? 'Ready to commit'
+      : (unstagedCount || untrackedCount ? 'Working tree changes' : 'Clean / committed');
+
+    if (summary) {
+      summary.innerHTML = [
+        `Branch: ${escapeHtml(data.branch || 'detached')}`,
+        `Stage: ${currentStage}`,
+        `Staged: ${stagedCount}`,
+        `Modified: ${unstagedCount}`,
+        `Untracked: ${untrackedCount}`,
+        data.tracking ? `Tracking: ${escapeHtml(data.tracking)}` : ''
+      ].filter(Boolean).map((item) => `<span>${item}</span>`).join('');
+    }
+
+    const statusSections = [];
+    if (data.staged) statusSections.push(`STAGED\n${data.staged}`);
+    if (data.unstaged) statusSections.push(`NOT STAGED\n${data.unstaged}`);
+    const untracked = (data.status || '').split('\n').filter((line) => line.startsWith('??')).join('\n');
+    if (untracked) statusSections.push(`UNTRACKED\n${untracked}`);
+    pre.textContent = statusSections.join('\n\n') || 'Working tree is clean.';
+    if (remotes) remotes.textContent = data.remotes || 'No remotes configured.';
+
+    if (history) {
+      history.innerHTML = data.history?.length
+        ? data.history.map((entry) => `
+          <article class="git-history-item">
+            <span class="git-history-hash">${escapeHtml(entry.hash)}</span>
+            <span class="git-history-subject">${escapeHtml(entry.subject)}</span>
+            <span class="git-history-meta">${escapeHtml(entry.author)} · ${escapeHtml(entry.date)}</span>
+          </article>
+        `).join('')
+        : '<p class="message">No commits yet.</p>';
+    }
   } catch (_) {
     pre.textContent = 'No git repository found at project path.';
+    if (remotes) remotes.textContent = 'No remotes available.';
+    if (summary) summary.innerHTML = '<span>Not initialized</span>';
+    if (history) history.innerHTML = '<p class="message">No version history available.</p>';
   }
 }
 
@@ -111,6 +155,20 @@ function bindGitActions(project) {
     }
   });
 
+  // Fetch all remote references without changing the working tree
+  freshBind('gitFetch', async () => {
+    clearOutput();
+    writeOutput('git fetch --all --prune…');
+    try {
+      const data = await api(`/api/projects/${project.id}/git/fetch`, { method: 'POST' });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git fetch');
+    }
+  });
+
   // Forced pull
   freshBind('gitPullForce', async () => {
     clearOutput();
@@ -157,6 +215,51 @@ function bindGitActions(project) {
   });
 
   // Push
+  freshBind('gitStage', async () => {
+    clearOutput();
+    writeOutput('git add -A…');
+    try {
+      const data = await api(`/api/projects/${project.id}/git/stage`, { method: 'POST' });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git stage');
+    }
+  });
+
+  freshBind('gitUnstage', async () => {
+    clearOutput();
+    writeOutput('git reset HEAD -- .…');
+    try {
+      const data = await api(`/api/projects/${project.id}/git/unstage`, { method: 'POST' });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git unstage');
+    }
+  });
+
+  freshBind('gitCommit', async () => {
+    const message = document.getElementById('commitMsg')?.value.trim();
+    if (!message) { writeOutput('✗ Commit message is required'); return; }
+    clearOutput();
+    writeOutput('git commit…');
+    try {
+      const data = await api(`/api/projects/${project.id}/git/commit`, {
+        method: 'POST',
+        body: JSON.stringify({ message })
+      });
+      writeOutput(data.output || data.message);
+      await loadGitStatus(project);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'Git commit');
+    }
+  });
+
+  // Commit all changes and push in one deployment action
   freshBind('gitPush', async () => {
     const msg = document.getElementById('commitMsg')?.value.trim();
     clearOutput();

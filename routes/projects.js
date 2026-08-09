@@ -35,6 +35,10 @@ const {
   clone: gitClone,
   pull: gitPull,
   pullForced,
+  fetchRemotes: gitFetch,
+  stage: gitStage,
+  unstage: gitUnstage,
+  commit: gitCommit,
   stash: gitStash,
   removeRemote,
   push: gitPush
@@ -87,6 +91,10 @@ router.post('/:id/git/init', gitInit);
 router.post('/:id/git/clone', gitClone);
 router.post('/:id/git/pull', gitPull);
 router.post('/:id/git/pull/force', pullForced);
+router.post('/:id/git/fetch', gitFetch);
+router.post('/:id/git/stage', gitStage);
+router.post('/:id/git/unstage', gitUnstage);
+router.post('/:id/git/commit', gitCommit);
 router.post('/:id/git/stash', gitStash);
 router.post('/:id/git/remove-remote', removeRemote);
 router.post('/:id/git/push', gitPush);

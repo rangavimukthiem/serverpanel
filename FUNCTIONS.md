@@ -129,10 +129,14 @@ Password is **auto-generated** and saved to `project_envs`; never returned in th
 
 | Route | Method | Auth | Description |
 |---|---|---|---|
-| `/api/projects/:id/git/status` | GET | Member | `git status --short` + last 15 log lines |
+| `/api/projects/:id/git/status` | GET | Member | Working tree, staging area, remotes, branch + last 10 commits |
 | `/api/projects/:id/git/init` | POST | Manager | `git init` + optional remote add |
 | `/api/projects/:id/git/clone` | POST | Manager | `git clone <url>` into project path |
 | `/api/projects/:id/git/pull` | POST | Manager | `git pull origin <branch>` |
+| `/api/projects/:id/git/fetch` | POST | Manager | Fetch and prune all remotes |
+| `/api/projects/:id/git/stage` | POST | Manager | Stage all working-tree changes |
+| `/api/projects/:id/git/unstage` | POST | Manager | Unstage all staged changes |
+| `/api/projects/:id/git/commit` | POST | Manager | Commit currently staged changes |
 | `/api/projects/:id/git/stash` | POST | Manager | Stash tracked and untracked changes |
 | `/api/projects/:id/git/push` | POST | Manager | `git add -A && git commit -m "<msg>" && git push` |
 

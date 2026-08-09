@@ -549,25 +549,37 @@
                   <button id="gitInit" type="button">Init</button>
                   <button id="gitClone" type="button">Clone</button>
                   <button id="gitPull" type="button">Pull</button>
+                  <button id="gitFetch" type="button">Fetch</button>
                   <button id="gitPullForce" type="button">Pull (Force)</button>
                   <button id="gitStash" type="button">Stash</button>
                   <button id="gitRemoveRemote" type="button" class="ghost-button">Remove Remote</button>
                 </div>
               </div>
               <div class="wizard-card">
-                <h4>Commit &amp; Push</h4>
+                <h4>Stage, Commit &amp; Push</h4>
                 <div class="inline-form push-form">
                   <input id="commitMsg" type="text" placeholder="Commit message">
-                  <button id="gitPush" type="button">↑ Push</button>
+                  <div class="git-actions git-stage-actions">
+                    <button id="gitStage" type="button">Stage All</button>
+                    <button id="gitUnstage" class="ghost-button" type="button">Unstage All</button>
+                    <button id="gitCommit" type="button">Commit</button>
+                    <button id="gitPush" type="button">Commit &amp; Push</button>
+                  </div>
                 </div>
               </div>
               <div class="terminal-output" id="gitOutput"></div>
               <div class="wizard-card">
                 <div class="section-heading">
-                  <h4>Status &amp; Log</h4>
+                  <h4>Version Control Status</h4>
                   <button id="refreshGitStatus" class="ghost-button" type="button">↻ Refresh</button>
                 </div>
-                <pre id="gitStatusOut" class="git-log">Loading…</pre>
+                <div id="gitSummary" class="git-summary"></div>
+                <div class="git-status-grid">
+                  <section><h5>Current Stage</h5><pre id="gitStatusOut" class="git-log">Loading…</pre></section>
+                  <section><h5>Remotes (git remote -v)</h5><pre id="gitRemotesOut" class="git-log">Loading…</pre></section>
+                </div>
+                <h5 class="git-history-heading">Recent Version History</h5>
+                <div id="gitHistory" class="git-history"></div>
               </div>
             </div>
 
