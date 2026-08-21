@@ -44,7 +44,7 @@ const {
   push: gitPush
 } = require('../controllers/projectGitController');
 const { list: listEndpoints, add: addEndpoint, update: updateEndpoint, remove: removeEndpoint } = require('../controllers/projectEndpointController');
-const { install: npmInstall } = require('../controllers/projectNpmController');
+const { install: npmInstall, detectScripts: npmDetectScripts } = require('../controllers/projectNpmController');
 const { list: listEnvKeys, upsert: upsertEnv, remove: removeEnv } = require('../controllers/projectEnvController');
 const {
   listLinkedServices,
@@ -102,6 +102,7 @@ router.post('/:id/git/push', gitPush);
 
 // ── NPM operations ────────────────────────────────────────────────────────────
 router.post('/:id/npm/install', npmInstall);
+router.get('/:id/npm/detect-scripts', npmDetectScripts);
 
 // ── API endpoint management ───────────────────────────────────────────────────
 router.get('/:id/endpoints', listEndpoints);

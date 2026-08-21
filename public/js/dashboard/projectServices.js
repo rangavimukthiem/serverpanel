@@ -369,6 +369,34 @@ function bindWizard(project, isAdminUser) {
     });
   }
 
+  // Auto-detect entry point
+  const autoDetectBtn = document.getElementById('autoDetectExecBtn');
+  if (autoDetectBtn) {
+    const freshAuto = autoDetectBtn.cloneNode(true);
+    autoDetectBtn.replaceWith(freshAuto);
+    freshAuto.addEventListener('click', async () => {
+      const execInput = document.getElementById('newSvcExec');
+      if (!execInput) return;
+      freshAuto.disabled = true;
+      const originalText = freshAuto.textContent;
+      freshAuto.textContent = 'Detecting…';
+      try {
+        const data = await api(`/api/projects/${project.id}/npm/detect-scripts`);
+        if (data.detectedCommand) {
+          execInput.value = data.detectedCommand;
+          showGlobalMessage(`Auto-detected entry point: ${data.detectedCommand}`, 'success');
+        } else {
+          showGlobalMessage('Could not detect a clear entry point. Please set manually.', 'warning');
+        }
+      } catch (err) {
+        reportGlobalError(err, 'Auto-detect');
+      } finally {
+        freshAuto.disabled = false;
+        freshAuto.textContent = originalText;
+      }
+    });
+  }
+
   // Live service name hint — strip .service suffix in display
   const nameInput = document.getElementById('newSvcName');
   const nameHint  = document.getElementById('svcNameHint');

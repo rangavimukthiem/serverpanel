@@ -8,6 +8,8 @@
 
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const fs = require('fs').promises;
+const path = require('path');
 
 const { findProjectById, getProjectMembership } = require('../models/projectModel');
 const { createLog } = require('../models/logModel');
@@ -84,4 +86,65 @@ async function install(req, res, next) {
   }
 }
 
-module.exports = { install };
+/**
+ * GET /api/projects/:id/npm/detect-scripts
+ * Looks for package.json scripts and common node entry files to suggest an ExecStart command.
+ */
+async function detectScripts(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    let packageScripts = [];
+    let detectedCommand = '';
+
+    // Check package.json
+    try {
+      const packageJsonPath = path.join(project.path, 'package.json');
+      const packageJsonRaw = await fs.readFile(packageJsonPath, 'utf8');
+      const packageJson = JSON.parse(packageJsonRaw);
+      
+      if (packageJson.scripts) {
+        packageScripts = Object.keys(packageJson.scripts);
+        if (packageJson.scripts.start) {
+          detectedCommand = 'npm start';
+        } else if (packageJson.scripts.dev) {
+          detectedCommand = 'npm run dev';
+        }
+      }
+    } catch (err) {
+      // Ignore errors (file missing or invalid json)
+    }
+
+    // Check for common files if no scripts found
+    if (!detectedCommand) {
+      const commonFiles = ['server.js', 'index.js', 'app.js', 'main.js'];
+      for (const file of commonFiles) {
+        try {
+          await fs.access(path.join(project.path, file));
+          detectedCommand = `node ${file}`;
+          break;
+        } catch (err) {
+          // File does not exist
+        }
+      }
+    }
+
+    return res.json({
+      scripts: packageScripts,
+      detectedCommand: detectedCommand || 'npm start'
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { install, detectScripts };

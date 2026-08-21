@@ -654,7 +654,10 @@
                             main.py</button>
                           <button type="button" class="preset-chip" data-preset="npm run dev">npm run dev</button>
                         </div>
-                        <input id="newSvcExec" type="text" placeholder="npm start — auto-filled from runtime">
+                        <div style="display:flex; gap: 8px;">
+                          <input id="newSvcExec" type="text" placeholder="npm start — auto-filled from runtime" style="flex:1;">
+                          <button type="button" id="autoDetectExecBtn" class="ghost-button" title="Detect entry point">Auto-detect</button>
+                        </div>
                       </label>
                     </div>
 
