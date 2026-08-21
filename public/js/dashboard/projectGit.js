@@ -276,4 +276,17 @@ function bindGitActions(project) {
       reportGlobalError(err, 'Git push');
     }
   });
+
+  // NPM Install
+  freshBind('npmInstall', async () => {
+    clearOutput();
+    writeOutput(`npm install (this may take a while)…`);
+    try {
+      const data = await api(`/api/projects/${project.id}/npm/install`, { method: 'POST' });
+      writeOutput(data.output || data.message);
+    } catch (err) {
+      writeOutput(`✗ ${err.message}`);
+      reportGlobalError(err, 'NPM Install');
+    }
+  });
 }
