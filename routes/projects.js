@@ -43,8 +43,10 @@ const {
   removeRemote,
   push: gitPush
 } = require('../controllers/projectGitController');
-const { list: listEndpoints, add: addEndpoint, update: updateEndpoint, remove: removeEndpoint } = require('../controllers/projectEndpointController');
-const { install: npmInstall, detectScripts: npmDetectScripts } = require('../controllers/projectNpmController');
+const { list: listEndpoints, add: addEndpoint, update: updateEndpoint, remove: removeEndpoint, testEndpoint } = require('../controllers/projectEndpointController');
+const { install: npmInstall, detectScripts: npmDetectScripts, runMigration } = require('../controllers/projectNpmController');
+const { getStatistics } = require('../controllers/projectStatisticsController');
+const { getAnalytics } = require('../controllers/projectAnalyticsController');
 const { list: listEnvKeys, upsert: upsertEnv, remove: removeEnv } = require('../controllers/projectEnvController');
 const {
   listLinkedServices,
@@ -64,6 +66,8 @@ router.get('/', listProjects);
 router.post('/', requireAdmin, createManagedProject);
 router.delete('/:id', requireAdmin, deleteProject);
 router.patch('/:id/status', requireAdmin, updateProjectStatus);
+router.get('/:id/statistics', getStatistics);
+router.get('/:id/analytics', getAnalytics);
 
 // ── Wizard config ────────────────────────────────────────────────────────────
 router.get('/:id/wizard', getProjectWizard);
@@ -103,12 +107,14 @@ router.post('/:id/git/push', gitPush);
 // ── NPM operations ────────────────────────────────────────────────────────────
 router.post('/:id/npm/install', npmInstall);
 router.get('/:id/npm/detect-scripts', npmDetectScripts);
+router.post('/:id/npm/migrate', runMigration);
 
 // ── API endpoint management ───────────────────────────────────────────────────
 router.get('/:id/endpoints', listEndpoints);
 router.post('/:id/endpoints', addEndpoint);
 router.put('/:id/endpoints/:idx', updateEndpoint);
 router.delete('/:id/endpoints/:idx', removeEndpoint);
+router.post('/:id/endpoints/:idx/test', testEndpoint);
 
 // ── Per-project environment variables ─────────────────────────────────────────
 router.get('/:id/env', listEnvKeys);

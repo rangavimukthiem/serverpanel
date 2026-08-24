@@ -61,6 +61,8 @@ All endpoints require a valid session cookie (`ekafy_token`) or `Authorization: 
 | `/api/projects/:id/config` | PATCH | Manager | Update project wizard config (kind, db, api, presets, notes) |
 | `/api/projects/:id/members` | PUT | Manager | Assign a user to a project with a role |
 | `/api/projects/:id/members/:userId` | DELETE | Manager | Remove a user from a project |
+| `/api/projects/:id/statistics` | GET | Member | Get project statistics (disk usage, endpoints, db size, services) |
+| `/api/projects/:id/analytics` | GET | Member | Get project web analytics (unique visitors, status codes, top paths) |
 
 **POST `/api/projects` body:**
 ```json
@@ -161,6 +163,7 @@ All git commands use `execFile('git', [...])` — no shell string interpolation.
 | `/api/projects/:id/endpoints` | POST | Manager | Add an endpoint |
 | `/api/projects/:id/endpoints/:idx` | PUT | Manager | Update an endpoint by array index |
 | `/api/projects/:id/endpoints/:idx` | DELETE | Manager | Remove an endpoint |
+| `/api/projects/:id/endpoints/:idx/test` | POST | Manager | Execute an HTTP request against the endpoint from the server |
 
 Endpoints are stored in `config_json.api.endpoints[]` and editable at any time.
 
@@ -168,6 +171,16 @@ Endpoints are stored in `config_json.api.endpoints[]` and editable at any time.
 ```json
 { "name": "Health", "method": "GET", "path": "/health", "description": "Service health check" }
 ```
+
+---
+
+### NPM Operations
+
+| Route | Method | Auth | Description |
+|---|---|---|---|
+| `/api/projects/:id/npm/install` | POST | Manager | Run `npm install` in project root |
+| `/api/projects/:id/npm/detect-scripts` | GET | Manager | Parse package.json to suggest run scripts |
+| `/api/projects/:id/npm/migrate` | POST | Manager | Run `npm run migrate`. Requires `{"confirm": true}` body. |
 
 ---
 
@@ -261,8 +274,11 @@ server.js                            ← Express app, boot, error handler
 │   ├── projectSetupController.js    ← scaffold / nginx / ssl
 │   ├── projectDatabaseController.js ← provision / tables / SQL query
 │   ├── projectGitController.js      ← init / clone / pull / push / status
-│   ├── projectEndpointController.js ← endpoint CRUD (stored in config_json)
+│   ├── projectNpmController.js      ← install / detect-scripts / runMigration
+│   ├── projectEndpointController.js ← endpoint CRUD + test functionality
 │   ├── projectEnvController.js      ← env CRUD (project_envs table)
+│   ├── projectStatisticsController.js ← aggregate stats (disk, db, endpoints)
+│   ├── projectAnalyticsController.js  ← parse nginx logs for insights
 │   └── serviceController.js         ← global + project-linked service control
 │
 ├── models/

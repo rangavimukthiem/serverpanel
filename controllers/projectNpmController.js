@@ -147,4 +147,60 @@ async function detectScripts(req, res, next) {
   }
 }
 
-module.exports = { install, detectScripts };
+/**
+ * POST /api/projects/:id/npm/migrate
+ */
+async function runMigration(req, res, next) {
+  try {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return res.status(400).json({ message: 'Invalid project id' });
+    }
+    if (!requireLinux(res)) return;
+
+    const project = await findProjectById(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+    if (!(await canManage(req.user, projectId))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    if (req.body.confirm !== true) {
+      return res.status(400).json({ 
+        message: 'Database migration requires explicit user confirmation.',
+        requiresConfirm: true
+      });
+    }
+
+    const npmBin = process.env.PROJECT_SERVICE_NPM_BIN || 'npm';
+    const appUser = process.env.PROJECT_SERVICE_USER;
+    
+    let cmd = npmBin;
+    let args = ['run', 'migrate'];
+
+    if (appUser && typeof process.getuid === 'function' && process.getuid() === 0) {
+      cmd = 'sudo';
+      args = ['-u', appUser, npmBin, 'run', 'migrate'];
+    }
+
+    try {
+      const result = await execFileAsync(cmd, args, { cwd: project.path, timeout: NPM_TIMEOUT });
+      await createLog({ userId: req.user.id, action: `npm run migrate on project ${project.name}` });
+      return res.json({
+        message: 'Migration complete',
+        ok: true,
+        output: [result.stdout, result.stderr].filter(Boolean).join('\n')
+      });
+    } catch (error) {
+      const output = [error.stdout, error.stderr, error.message].filter(Boolean).join('\n');
+      return res.json({
+        message: 'Migration encountered errors',
+        ok: false,
+        output
+      });
+    }
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { install, detectScripts, runMigration };

@@ -200,4 +200,79 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, add, update, remove };
+/**
+ * POST /api/projects/:id/endpoints/:idx/test
+ */
+async function testEndpoint(req, res, next) {
+  try {
+    const project = await resolveProject(req, res);
+    if (!project) return;
+
+    if (!(await canManage(req.user, project.id))) {
+      return res.status(403).json({ message: 'Project manager access required' });
+    }
+
+    const idx = Number(req.params.idx);
+    if (!Number.isInteger(idx) || idx < 0) {
+      return res.status(400).json({ message: 'Invalid endpoint index' });
+    }
+
+    const config = project.config;
+    const endpoints = Array.isArray(config.api?.endpoints) ? config.api.endpoints : [];
+    if (idx >= endpoints.length) {
+      return res.status(404).json({ message: 'Endpoint not found at that index' });
+    }
+
+    const endpoint = endpoints[idx];
+    const baseUrl = config.api?.baseUrl || `http://127.0.0.1:${project.port || 3000}`;
+    const url = `${baseUrl.replace(/\/$/, '')}/${endpoint.path.replace(/^\//, '')}`;
+    
+    const fetchOptions = {
+      method: endpoint.method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    };
+    
+    if (endpoint.method !== 'GET' && endpoint.method !== 'HEAD' && req.body.payload) {
+       fetchOptions.body = typeof req.body.payload === 'string' ? req.body.payload : JSON.stringify(req.body.payload);
+    }
+
+    const startTime = Date.now();
+    let fetchRes;
+    try {
+      // Node 18+ native fetch
+      fetchRes = await fetch(url, fetchOptions);
+    } catch (fetchErr) {
+      return res.status(502).json({ 
+        message: 'Failed to reach endpoint', 
+        error: fetchErr.message,
+        url
+      });
+    }
+
+    const timeTaken = Date.now() - startTime;
+    const responseHeaders = Object.fromEntries(fetchRes.headers.entries());
+    const responseText = await fetchRes.text();
+    
+    let responseBody = responseText;
+    try {
+      responseBody = JSON.parse(responseText);
+    } catch (e) {
+      // leave as text
+    }
+
+    return res.json({
+      url,
+      status: fetchRes.status,
+      timeTakenMs: timeTaken,
+      headers: responseHeaders,
+      body: responseBody
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+module.exports = { list, add, update, remove, testEndpoint };
