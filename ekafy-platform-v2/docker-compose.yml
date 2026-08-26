@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------
+  # Traefik Reverse Proxy
+  # ---------------------------------------------------------
+  traefik:
+    image: traefik:v2.10
+    container_name: ekafy-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      # Global HTTP to HTTPS redirect
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      # Let's Encrypt configuration
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=${SSL_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./data/letsencrypt:/letsencrypt"
+    networks:
+      - ekafy-net
+
+  # ---------------------------------------------------------
+  # MariaDB (Master Database & Tenant Databases)
+  # ---------------------------------------------------------
+  mariadb:
+    image: mariadb:10.11
+    container_name: ekafy-mariadb
+    restart: unless-stopped
+    environment:
+      - MARIADB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=ekafy_master
+      - MARIADB_USER=ekafy_admin
+      - MARIADB_PASSWORD=${DB_ADMIN_PASSWORD}
+    volumes:
+      - ./data/mariadb:/var/lib/mysql
+    networks:
+      - ekafy-net
+
+  # ---------------------------------------------------------
+  # Redis (Sessions, Cache, Job Queues)
+  # ---------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: ekafy-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - ekafy-net
+
+  # ---------------------------------------------------------
+  # EKAFY Server Manager (Admin Backend / Dashboard)
+  # ---------------------------------------------------------
+  manager:
+    build: ./manager
+    container_name: ekafy-manager
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_USER=ekafy_admin
+      - DB_PASSWORD=${DB_ADMIN_PASSWORD}
+      - DB_NAME=ekafy_master
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+    labels:
+      - "traefik.enable=true"
+      # Routing for admin dashboard (e.g. admin.ekafy.com)
+      - "traefik.http.routers.manager.rule=Host(`${MANAGER_DOMAIN}`)"
+      - "traefik.http.routers.manager.entrypoints=websecure"
+      - "traefik.http.routers.manager.tls.certresolver=myresolver"
+    depends_on:
+      - mariadb
+      - redis
+    networks:
+      - ekafy-net
+
+  # ---------------------------------------------------------
+  # EKAFY Core (Multi-Tenant SaaS Application)
+  # ---------------------------------------------------------
+  core:
+    build: ./core
+    container_name: ekafy-core
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MASTER_DB_HOST=mariadb
+      - MASTER_DB_PORT=3306
+      - MASTER_DB_USER=root
+      - MASTER_DB_PASSWORD=${DB_ROOT_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+    labels:
+      - "traefik.enable=true"
+      # Catch-all routing for customer applications (e.g. *.ekafy.com)
+      - "traefik.http.routers.core.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.${CORE_DOMAIN}`, `${CORE_DOMAIN}`)"
+      - "traefik.http.routers.core.entrypoints=websecure"
+      - "traefik.http.routers.core.tls.certresolver=myresolver"
+    depends_on:
+      - mariadb
+      - redis
+    networks:
+      - ekafy-net
+
+networks:
+  ekafy-net:
+    name: ekafy-net
+    driver: bridge

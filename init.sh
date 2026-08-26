@@ -863,6 +863,45 @@ SUMMARY
   printf '  Keep %s/.env private — it contains production secrets.\n\n' "$APP_DIR"
 }
 
+setup_webmin() {
+  if ! command -v webmin >/dev/null 2>&1 && [ ! -d "/etc/webmin" ]; then
+    log "Setting up Webmin..."
+    curl -s -o setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
+    sh setup-repos.sh -f
+    apt-get install -y webmin --install-recommends
+    log "Webmin installed."
+  else
+    log "Webmin is already installed."
+  fi
+}
+
+prompt_ssh_key() {
+  local answer=""
+  read -r -p "Do you want to add an SSH public key for easy access from your PC? [y/N]: " answer
+  answer="${answer,,}"
+
+  if [[ "$answer" =~ ^(y|yes)$ ]]; then
+    local ssh_key=""
+    read -r -p "Enter your SSH public key (e.g. ssh-rsa AAA...): " ssh_key
+    if [[ -n "$ssh_key" ]]; then
+      mkdir -p /root/.ssh
+      echo "$ssh_key" >> /root/.ssh/authorized_keys
+      chmod 600 /root/.ssh/authorized_keys
+      chmod 700 /root/.ssh
+      
+      if [[ -n "$APP_USER" && -n "$APP_DIR" ]]; then
+        mkdir -p "$APP_DIR/.ssh"
+        echo "$ssh_key" >> "$APP_DIR/.ssh/authorized_keys"
+        chmod 600 "$APP_DIR/.ssh/authorized_keys"
+        chmod 700 "$APP_DIR/.ssh"
+        chown -R "$APP_USER:$APP_GROUP" "$APP_DIR/.ssh"
+      fi
+      
+      log "SSH public key added for root and $APP_USER"
+    fi
+  fi
+}
+
 main() {
   require_root
   require_linux
@@ -886,8 +925,10 @@ main() {
 
   # Prompt for Nginx/domain interactively before any package installs
   prompt_nginx_setup
+  prompt_ssh_key
 
   install_packages
+  setup_webmin
   require_command mysql
   create_app_user
   prepare_app_dir
