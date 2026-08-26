@@ -76,8 +76,23 @@ else
     echo -e "${GREEN}Docker is already installed.${NC}"
 fi
 
-# 8. Environment Validation
-echo -e "${YELLOW}Step 7: Validating Environment Configuration...${NC}"
+# 8. Install Webmin
+echo -e "${YELLOW}Step 7: Installing Webmin on Host...${NC}"
+if ! command -v webmin &> /dev/null; then
+    curl -s -o setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
+    sh setup-repos.sh -f
+    apt-get install -y webmin --install-recommends
+    
+    # Disable Webmin's internal SSL so Traefik can safely proxy it over HTTP
+    sed -i 's/ssl=1/ssl=0/' /etc/webmin/miniserv.conf
+    systemctl restart webmin
+    echo -e "${GREEN}Webmin installed. It is secured behind Traefik (Port 10000 is blocked from public internet).${NC}"
+else
+    echo -e "${GREEN}Webmin is already installed.${NC}"
+fi
+
+# 9. Environment Validation
+echo -e "${YELLOW}Step 8: Validating Environment Configuration...${NC}"
 if [ ! -f ".env" ]; then
     echo -e "${YELLOW}Warning: .env file not found. Copying from .env.example...${NC}"
     if [ -f ".env.example" ]; then
