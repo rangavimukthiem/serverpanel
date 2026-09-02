@@ -80,29 +80,36 @@ app.use('/api/projects', projectRoutes);
 // Client & Admin Routes (Protected by JWT, role checked in controller)
 app.use('/api/chat', chatRoutes);
 
-// Initialize Database Schema on Boot
-async function initDB() {
-  try {
-    console.log('Connecting to Master Database...');
-    const connection = await pool.getConnection();
-    console.log('Database connected successfully.');
+// Initialize Database Schema on Boot with Retry Logic
+async function initDB(retries = 15, delay = 2000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      console.log(`Connecting to Master Database (attempt ${attempt}/${retries})...`);
+      const connection = await pool.getConnection();
+      console.log('Database connected successfully.');
 
-    // In production, you would run migrations. For now, we load the schema file.
-    const schemaPath = path.join(__dirname, 'config', 'schema.sql');
-    if (fs.existsSync(schemaPath)) {
-      const sql = fs.readFileSync(schemaPath, 'utf8');
-      // Splitting by semicolon is basic; works for simple schemas without triggers/functions
-      const statements = sql.split(';').filter(stmt => stmt.trim() !== '');
-      for (const stmt of statements) {
-        await connection.query(stmt);
+      // In production, you would run migrations. For now, we load the schema file.
+      const schemaPath = path.join(__dirname, 'config', 'schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const sql = fs.readFileSync(schemaPath, 'utf8');
+        // Splitting by semicolon is basic; works for simple schemas without triggers/functions
+        const statements = sql.split(';').filter(stmt => stmt.trim() !== '');
+        for (const stmt of statements) {
+          await connection.query(stmt);
+        }
+        console.log('Master Database schema synchronized.');
       }
-      console.log('Master Database schema synchronized.');
+      
+      connection.release();
+      return;
+    } catch (err) {
+      console.warn(`Database connection attempt ${attempt} failed: ${err.message}`);
+      if (attempt === retries) {
+        console.error('Max database connection retries reached. Exiting.');
+        process.exit(1);
+      }
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    connection.release();
-  } catch (err) {
-    console.error('Database connection failed:', err);
-    process.exit(1);
   }
 }
 
