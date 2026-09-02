@@ -85,6 +85,7 @@ services:
       - "traefik.http.routers.manager.rule=Host(`${MANAGER_DOMAIN}`)"
       - "traefik.http.routers.manager.entrypoints=websecure"
       - "traefik.http.routers.manager.tls.certresolver=myresolver"
+      - "traefik.http.routers.manager.priority=100"
     depends_on:
       - mariadb
       - redis
@@ -114,6 +115,7 @@ services:
       - "traefik.http.routers.core.rule=Host(`${CORE_DOMAIN}`) || HostRegexp(`^[a-z0-9-]+\\.${CORE_DOMAIN}$$`)"
       - "traefik.http.routers.core.entrypoints=websecure"
       - "traefik.http.routers.core.tls.certresolver=myresolver"
+      - "traefik.http.routers.core.priority=10"
     depends_on:
       - mariadb
       - redis
@@ -135,6 +137,7 @@ services:
       - "traefik.http.routers.webmin.rule=Host(`${WEBMIN_DOMAIN}`)"
       - "traefik.http.routers.webmin.entrypoints=websecure"
       - "traefik.http.routers.webmin.tls.certresolver=myresolver"
+      - "traefik.http.routers.webmin.priority=100"
       - "traefik.http.services.webmin.loadbalancer.server.port=10000"
     networks:
       - ekafy-net
