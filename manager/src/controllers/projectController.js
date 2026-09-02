@@ -203,6 +203,13 @@ DB_PORT=3306
 DB_USER=${process.env.DB_USER || 'ekafy_admin'}
 DB_PASSWORD=${process.env.DB_PASSWORD || ''}
 DB_NAME=${dbName}
+MYSQL_HOST=mariadb
+MYSQL_PORT=3306
+MYSQL_USER=${process.env.DB_USER || 'ekafy_admin'}
+MYSQL_PASSWORD=${process.env.DB_PASSWORD || ''}
+MYSQL_DATABASE=${dbName}
+DATABASE_HOST=mariadb
+DATABASE_NAME=${dbName}
 REDIS_HOST=redis
 ${env_vars}
 `.trim();
@@ -234,14 +241,14 @@ http:
 `.trim();
     fs.writeFileSync(dynamicConfigPath, dynamicYaml);
 
-    // 6. Build and Launch Container via Docker CLI on ekafy-net
+    // 6. Build and Launch Container via Docker CLI on ekafy-net with Environment Variables
     try {
       console.log(`Building container ${containerName}...`);
       await execPromise(`docker build -t ${containerName}:latest ${projectDir}`);
       // Remove any existing container with same name
       await execPromise(`docker rm -f ${containerName} || true`);
-      // Run container on ekafy-net
-      await execPromise(`docker run -d --name ${containerName} --restart unless-stopped --network ekafy-net ${containerName}:latest`);
+      // Run container on ekafy-net with loaded environment file
+      await execPromise(`docker run -d --name ${containerName} --restart unless-stopped --network ekafy-net --env-file ${appEnvPath} ${containerName}:latest`);
       console.log(`Container ${containerName} started successfully.`);
     } catch (dockerErr) {
       console.warn(`Docker launch note: ${dockerErr.message}`);
