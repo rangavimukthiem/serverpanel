@@ -57,8 +57,10 @@ ufw default allow outgoing
 ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
+# Allow Docker internal container proxies to connect to Webmin (Port 10000 stays blocked from the public internet)
+ufw allow from 172.16.0.0/12 to any port 10000 proto tcp
 ufw --force enable
-echo -e "${GREEN}Firewall enabled. Database ports are securely blocked from the outside.${NC}"
+echo -e "${GREEN}Firewall enabled. Port 80, 443, and 22 open. Database and Webmin ports securely blocked from the public internet.${NC}"
 
 # 6. Fail2Ban
 echo -e "${YELLOW}Step 5: Enabling Fail2Ban Intrusion Prevention...${NC}"
