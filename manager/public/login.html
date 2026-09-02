@@ -166,6 +166,21 @@
       }
     }
 
+    // Wait for Google GSI script to load
+    function waitForGoogle(callback, maxAttempts = 30) {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (window.google && window.google.accounts && window.google.accounts.id) {
+          clearInterval(interval);
+          callback();
+        } else if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          console.warn('Google GSI SDK loading timed out.');
+        }
+      }, 100);
+    }
+
     // Initialize Google Button
     async function initAuth() {
       try {
@@ -173,24 +188,27 @@
         const data = await res.json();
 
         if (data.success && data.googleClientId) {
-          window.google.accounts.id.initialize({
-            client_id: data.googleClientId,
-            callback: handleGoogleCredential,
-            auto_select: false,
-            cancel_on_tap_outside: false
-          });
+          configNotice.style.display = 'none';
+          waitForGoogle(() => {
+            window.google.accounts.id.initialize({
+              client_id: data.googleClientId,
+              callback: handleGoogleCredential,
+              auto_select: false,
+              cancel_on_tap_outside: false
+            });
 
-          window.google.accounts.id.renderButton(
-            document.getElementById('google-signin-btn'),
-            {
-              theme: 'filled_blue',
-              size: 'large',
-              shape: 'pill',
-              width: 320,
-              text: 'continue_with',
-              logo_alignment: 'left'
-            }
-          );
+            window.google.accounts.id.renderButton(
+              document.getElementById('google-signin-btn'),
+              {
+                theme: 'filled_blue',
+                size: 'large',
+                shape: 'pill',
+                width: 320,
+                text: 'continue_with',
+                logo_alignment: 'left'
+              }
+            );
+          });
         } else {
           configNotice.style.display = 'block';
         }
