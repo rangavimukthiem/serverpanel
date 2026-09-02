@@ -3,7 +3,7 @@ services:
   # Traefik Reverse Proxy
   # ---------------------------------------------------------
   traefik:
-    image: traefik:v3.1
+    image: traefik:latest
     container_name: ekafy-traefik
     restart: unless-stopped
     environment:
