@@ -40,6 +40,17 @@ const API = {
     return res.json();
   },
 
+  async delete(endpoint) {
+    const res = await fetch(`/api${endpoint}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    if (res.status === 401 || res.status === 403) {
+      this.handleAuthError();
+    }
+    return res.json();
+  },
+
   handleAuthError() {
     localStorage.removeItem('ekafy_token');
     localStorage.removeItem('ekafy_user');
