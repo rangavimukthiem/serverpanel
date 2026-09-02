@@ -143,8 +143,10 @@ services:
     image: alpine/socat
     container_name: ekafy-webmin-proxy
     restart: unless-stopped
-    # Forwards Traefik's traffic to the Host's internal docker gateway (172.17.0.1) where Webmin is listening
-    command: tcp-listen:10000,fork,reuseaddr tcp:172.17.0.1:10000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # Forwards Traefik traffic to Webmin listening on the host's port 10000
+    command: tcp-listen:10000,fork,reuseaddr tcp:host.docker.internal:10000
     labels:
       - "traefik.enable=true"
       # Routing for Webmin

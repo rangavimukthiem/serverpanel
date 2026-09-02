@@ -84,18 +84,21 @@ if [ -n "$SUDO_USER" ]; then
 fi
 
 # 8. Install Webmin
-echo -e "${YELLOW}Step 7: Installing Webmin on Host...${NC}"
+echo -e "${YELLOW}Step 7: Installing & Configuring Webmin on Host...${NC}"
 if ! command -v webmin &> /dev/null; then
     curl -s -o setup-repos.sh https://raw.githubusercontent.com/webmin/webmin/master/setup-repos.sh
     sh setup-repos.sh -f
     apt-get install -y webmin --install-recommends
-    
-    # Disable Webmin's internal SSL so Traefik can safely proxy it over HTTP
+fi
+
+# Configure Webmin for Traefik Reverse Proxy
+if [ -f "/etc/webmin/miniserv.conf" ]; then
+    # Disable internal SSL so Traefik proxies cleanly over HTTP internally
     sed -i 's/ssl=1/ssl=0/' /etc/webmin/miniserv.conf
-    systemctl restart webmin
-    echo -e "${GREEN}Webmin installed. It is secured behind Traefik (Port 10000 is blocked from public internet).${NC}"
-else
-    echo -e "${GREEN}Webmin is already installed.${NC}"
+    grep -q "trust_real_ip=1" /etc/webmin/miniserv.conf || echo "trust_real_ip=1" >> /etc/webmin/miniserv.conf
+    grep -q "referers=" /etc/webmin/miniserv.conf || echo "referers=panel.ekafy.com" >> /etc/webmin/miniserv.conf
+    systemctl restart webmin || true
+    echo -e "${GREEN}✓ Webmin configured for secure reverse proxy behind Traefik.${NC}"
 fi
 
 # 8. Environment Setup & Password Generation
@@ -202,6 +205,17 @@ fi
 
 if [ -n "$SUDO_USER" ]; then
     chown "$SUDO_USER:$SUDO_USER" .env 2>/dev/null || true
+fi
+
+# Ensure Webmin referers match the configured domain
+ACTIVE_WEBMIN_DOM=$(grep "^WEBMIN_DOMAIN=" .env 2>/dev/null | cut -d '=' -f2)
+if [ -n "$ACTIVE_WEBMIN_DOM" ] && [ -f "/etc/webmin/miniserv.conf" ]; then
+    if grep -q "referers=" /etc/webmin/miniserv.conf; then
+        sed -i "s|^referers=.*|referers=${ACTIVE_WEBMIN_DOM}|" /etc/webmin/miniserv.conf
+    else
+        echo "referers=${ACTIVE_WEBMIN_DOM}" >> /etc/webmin/miniserv.conf
+    fi
+    systemctl restart webmin || true
 fi
 
 # 9. Free Port 80 & 443 from Host Web Servers
