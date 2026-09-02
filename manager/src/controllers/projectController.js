@@ -284,3 +284,176 @@ http:
     if (conn) await conn.end();
   }
 };
+
+/**
+ * Start a Project Container (Bring UP)
+ */
+exports.startProject = async (req, res) => {
+  let conn;
+  try {
+    const { id } = req.params;
+    conn = await getMasterConnection();
+    const [rows] = await conn.query('SELECT * FROM projects WHERE id = ?', [id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const project = rows[0];
+    const cleanSlug = project.slug || project.name.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const containerName = `ekafy-project-${cleanSlug}`;
+    const dynamicDir = path.join('/app', 'dynamic');
+    const dynamicConfigPath = path.join(dynamicDir, `project_${cleanSlug}.yml`);
+
+    // Restore Traefik routing configuration if missing
+    if (project.domain && !fs.existsSync(dynamicConfigPath)) {
+      const dynamicYaml = `
+http:
+  routers:
+    project-${cleanSlug}:
+      rule: "Host(\`${project.domain}\`) || Host(\`www.${project.domain}\`)"
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: myresolver
+      priority: 100
+      service: project-${cleanSlug}-svc
+  services:
+    project-${cleanSlug}-svc:
+      loadBalancer:
+        servers:
+          - url: "http://${containerName}:${project.port || 3000}"
+`.trim();
+      fs.writeFileSync(dynamicConfigPath, dynamicYaml);
+    }
+
+    await execPromise(`docker start ${containerName}`);
+    await conn.query('UPDATE projects SET status = "deployed" WHERE id = ?', [id]);
+
+    res.json({ success: true, message: `Project ${project.name} started successfully!` });
+  } catch (error) {
+    console.error('Error starting project:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to start project container' });
+  } finally {
+    if (conn) await conn.end();
+  }
+};
+
+/**
+ * Stop a Project Container (Bring DOWN)
+ */
+exports.stopProject = async (req, res) => {
+  let conn;
+  try {
+    const { id } = req.params;
+    conn = await getMasterConnection();
+    const [rows] = await conn.query('SELECT * FROM projects WHERE id = ?', [id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const project = rows[0];
+    const cleanSlug = project.slug || project.name.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const containerName = `ekafy-project-${cleanSlug}`;
+    const dynamicConfigPath = path.join('/app', 'dynamic', `project_${cleanSlug}.yml`);
+
+    // Stop container
+    await execPromise(`docker stop ${containerName} || true`);
+
+    // Temporarily remove Traefik route so it doesn't 502
+    if (fs.existsSync(dynamicConfigPath)) {
+      fs.unlinkSync(dynamicConfigPath);
+    }
+
+    await conn.query('UPDATE projects SET status = "stopped" WHERE id = ?', [id]);
+
+    res.json({ success: true, message: `Project ${project.name} stopped successfully!` });
+  } catch (error) {
+    console.error('Error stopping project:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to stop project container' });
+  } finally {
+    if (conn) await conn.end();
+  }
+};
+
+/**
+ * Restart a Project Container
+ */
+exports.restartProject = async (req, res) => {
+  let conn;
+  try {
+    const { id } = req.params;
+    conn = await getMasterConnection();
+    const [rows] = await conn.query('SELECT * FROM projects WHERE id = ?', [id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const project = rows[0];
+    const cleanSlug = project.slug || project.name.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const containerName = `ekafy-project-${cleanSlug}`;
+
+    await execPromise(`docker restart ${containerName}`);
+    await conn.query('UPDATE projects SET status = "deployed" WHERE id = ?', [id]);
+
+    res.json({ success: true, message: `Project ${project.name} restarted successfully!` });
+  } catch (error) {
+    console.error('Error restarting project:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to restart project container' });
+  } finally {
+    if (conn) await conn.end();
+  }
+};
+
+/**
+ * Delete a Project (Stops container, removes routing, drops DB & files)
+ */
+exports.deleteProject = async (req, res) => {
+  let conn;
+  try {
+    const { id } = req.params;
+    const { drop_db = 'true', delete_files = 'false' } = req.query;
+
+    conn = await getMasterConnection();
+    const [rows] = await conn.query('SELECT * FROM projects WHERE id = ?', [id]);
+    if (rows.length === 0) return res.status(404).json({ success: false, error: 'Project not found' });
+
+    const project = rows[0];
+    const cleanSlug = project.slug || project.name.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const containerName = `ekafy-project-${cleanSlug}`;
+    const dynamicConfigPath = path.join('/app', 'dynamic', `project_${cleanSlug}.yml`);
+    const projectDir = path.join('/app', 'projects', cleanSlug);
+
+    // 1. Remove Docker container
+    try {
+      await execPromise(`docker rm -f ${containerName} || true`);
+    } catch (_) {}
+
+    // 2. Remove Traefik dynamic routing file
+    if (fs.existsSync(dynamicConfigPath)) {
+      try { fs.unlinkSync(dynamicConfigPath); } catch (_) {}
+    }
+
+    // 3. Drop dedicated database if requested
+    if (drop_db === 'true' && project.db_name) {
+      const adminConn = await getAdminConnection('ekafy_master');
+      try {
+        await adminConn.query(`DROP DATABASE IF EXISTS \`${project.db_name}\``);
+      } catch (dbErr) {
+        console.warn(`Drop DB note: ${dbErr.message}`);
+      } finally {
+        await adminConn.end();
+      }
+    }
+
+    // 4. Delete files if requested
+    if (delete_files === 'true' && fs.existsSync(projectDir)) {
+      try {
+        fs.rmSync(projectDir, { recursive: true, force: true });
+      } catch (_) {}
+    }
+
+    // 5. Delete record from master database
+    await conn.query('DELETE FROM projects WHERE id = ?', [id]);
+
+    res.json({ success: true, message: `Project ${project.name} has been completely deleted!` });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to delete project' });
+  } finally {
+    if (conn) await conn.end();
+  }
+};

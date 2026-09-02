@@ -366,7 +366,7 @@ async function loadProjects() {
 function renderProjects() {
   const tbody = document.getElementById('projects-tbody');
   if (State.projects.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-dim);">No active project deployments yet. Click "+ Deploy New Project" to launch an app.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-dim);">No active project deployments yet. Click "+ Deploy New Project" to launch an app.</td></tr>';
     return;
   }
 
@@ -374,6 +374,7 @@ function renderProjects() {
     const isGit = p.git_repo_url && p.git_repo_url.startsWith('http');
     const domain = isGit ? (p.domain || p.name) : p.git_repo_url;
     const projectUrl = domain && !domain.startsWith('http') ? `https://${domain}` : domain;
+    const isStopped = p.status === 'stopped';
 
     return `
       <tr>
@@ -385,12 +386,98 @@ function renderProjects() {
           <span class="mono" style="font-size: 0.78rem; color: #94a3b8;">${isGit ? p.git_repo_url : 'Local Directory'}</span>
         </td>
         <td><span class="badge badge-primary">${(p.project_type || 'EXPRESS').toUpperCase()}</span></td>
-        <td><span class="badge badge-success"><span class="pulse-dot"></span> ${p.status || 'Active'}</span></td>
+        <td>
+          <span class="badge ${isStopped ? 'badge-warning' : 'badge-success'}">
+            <span class="pulse-dot"></span> ${p.status || 'deployed'}
+          </span>
+        </td>
         <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(p.created_at).toLocaleDateString()}</td>
+        <td style="text-align: right; white-space: nowrap;">
+          ${isStopped ? `
+            <button class="btn btn-primary btn-sm" onclick="startProject(${p.id}, '${p.name}')" title="Start Container">
+              ▲ Up
+            </button>
+          ` : `
+            <button class="btn btn-secondary btn-sm" onclick="stopProject(${p.id}, '${p.name}')" title="Stop Container">
+              ▼ Down
+            </button>
+          `}
+          <button class="btn btn-secondary btn-sm" onclick="restartProject(${p.id}, '${p.name}')" title="Restart Container" style="margin-left: 0.25rem;">
+            ↺
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="deleteProject(${p.id}, '${p.name}')" title="Delete Project" style="margin-left: 0.25rem; color: var(--danger); border-color: rgba(239, 68, 68, 0.4);">
+            ✕
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
 }
+
+window.startProject = async function(id, name) {
+  try {
+    const res = await API.post(`/projects/${id}/start`);
+    if (res.success) {
+      showToast(`Project "${name}" started (UP)!`);
+      loadProjects();
+      loadStats();
+    } else {
+      alert(`Error starting project: ${res.error || 'Failed'}`);
+    }
+  } catch (err) {
+    alert('Server error while starting project.');
+  }
+};
+
+window.stopProject = async function(id, name) {
+  try {
+    const res = await API.post(`/projects/${id}/stop`);
+    if (res.success) {
+      showToast(`Project "${name}" stopped (DOWN)!`);
+      loadProjects();
+      loadStats();
+    } else {
+      alert(`Error stopping project: ${res.error || 'Failed'}`);
+    }
+  } catch (err) {
+    alert('Server error while stopping project.');
+  }
+};
+
+window.restartProject = async function(id, name) {
+  try {
+    const res = await API.post(`/projects/${id}/restart`);
+    if (res.success) {
+      showToast(`Project "${name}" restarted!`);
+      loadProjects();
+      loadStats();
+    } else {
+      alert(`Error restarting project: ${res.error || 'Failed'}`);
+    }
+  } catch (err) {
+    alert('Server error while restarting project.');
+  }
+};
+
+window.deleteProject = async function(id, name) {
+  if (!confirm(`Are you sure you want to completely delete "${name}"?\n\nThis will stop and remove the container, remove the SSL route, and drop its database.`)) {
+    return;
+  }
+
+  try {
+    const res = await API.delete(`/projects/${id}?drop_db=true&delete_files=true`);
+    if (res.success) {
+      showToast(`Project "${name}" deleted completely!`);
+      loadProjects();
+      loadDatabases();
+      loadStats();
+    } else {
+      alert(`Error deleting project: ${res.error || 'Failed'}`);
+    }
+  } catch (err) {
+    alert('Server error while deleting project.');
+  }
+};
 
 // 6. Load Databases & SQL Console
 async function loadDatabases() {
