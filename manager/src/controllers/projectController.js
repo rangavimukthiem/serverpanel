@@ -44,6 +44,45 @@ exports.getAllProjects = async (req, res) => {
 };
 
 /**
+ * Automatically detects the application entrypoint from package.json and project files
+ */
+function detectNodeEntrypoint(projectDir) {
+  const pkgPath = path.join(projectDir, 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (pkg.scripts && pkg.scripts.start) {
+        return 'CMD ["npm", "start"]';
+      }
+      if (pkg.main && fs.existsSync(path.join(projectDir, pkg.main))) {
+        return `CMD ["node", "${pkg.main}"]`;
+      }
+    } catch (_) {}
+  }
+
+  // Scan file system in priority order
+  const candidates = [
+    'server.js',
+    'app.js',
+    'index.js',
+    'main.js',
+    'src/server.js',
+    'src/app.js',
+    'src/index.js',
+    'dist/server.js',
+    'dist/index.js'
+  ];
+
+  for (const file of candidates) {
+    if (fs.existsSync(path.join(projectDir, file))) {
+      return `CMD ["node", "${file}"]`;
+    }
+  }
+
+  return 'CMD ["npm", "start"]';
+}
+
+/**
  * Automated Project Creation, Git Cloner, Container Builder & Traefik Deployer
  */
 exports.deployProject = async (req, res) => {
@@ -129,35 +168,29 @@ exports.deployProject = async (req, res) => {
       }
     }
 
-    // 3. Ensure a Dockerfile exists and uses npm start
+    // 3. Smart Entrypoint Detection & Dockerfile Generation
     const dockerfilePath = path.join(projectDir, 'Dockerfile');
-    if (!fs.existsSync(dockerfilePath)) {
-      let defaultDockerfile = `
+    if (runtime_type === 'static') {
+      const staticDockerfile = `
+FROM nginx:alpine
+COPY . /usr/share/nginx/html
+EXPOSE 80
+`.trim();
+      fs.writeFileSync(dockerfilePath, staticDockerfile);
+    } else {
+      const detectedCmd = detectNodeEntrypoint(projectDir);
+      console.log(`[Auto-Detector] Detected entrypoint for ${cleanSlug}: ${detectedCmd}`);
+
+      const nodeDockerfile = `
 FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
 EXPOSE ${appPort}
-CMD ["npm", "start"]
-`;
-      if (runtime_type === 'static') {
-        defaultDockerfile = `
-FROM nginx:alpine
-COPY . /usr/share/nginx/html
-EXPOSE 80
-`;
-      }
-      fs.writeFileSync(dockerfilePath, defaultDockerfile.trim());
-    } else {
-      // If an existing Dockerfile has hardcoded src/server.js, update it to npm start
-      try {
-        let existingContent = fs.readFileSync(dockerfilePath, 'utf8');
-        if (existingContent.includes('src/server.js')) {
-          existingContent = existingContent.replace('node src/server.js', 'npm start').replace('["node", "src/server.js"]', '["npm", "start"]');
-          fs.writeFileSync(dockerfilePath, existingContent);
-        }
-      } catch (_) {}
+${detectedCmd}
+`.trim();
+      fs.writeFileSync(dockerfilePath, nodeDockerfile);
     }
 
     // 4. Write Application .env File
