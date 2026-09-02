@@ -1,9 +1,6 @@
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const mysql = require('mysql2/promise');
-const crypto = require('crypto');
-
-const client = process.env.GOOGLE_OAUTH_CLIENT_ID ? new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID) : null;
 
 const getMasterConnection = async () => {
   return await mysql.createConnection({
@@ -15,19 +12,6 @@ const getMasterConnection = async () => {
   });
 };
 
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPassword(password, stored) {
-  if (!stored || !stored.includes(':')) return false;
-  const [salt, hash] = stored.split(':');
-  const verifyHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-  return hash === verifyHash;
-}
-
 function generateToken(user) {
   const jwtSecret = process.env.JWT_SECRET || 'ekafy_default_secret';
   const expiresIn = process.env.JWT_EXPIRES_IN || '8h';
@@ -38,93 +22,7 @@ function generateToken(user) {
   );
 }
 
-// 1. Password Login
-exports.passwordLogin = async (req, res) => {
-  let conn;
-  try {
-    const { identifier, password } = req.body;
-    if (!identifier || !password) {
-      return res.status(400).json({ success: false, error: 'Username/Email and password are required.' });
-    }
-
-    conn = await getMasterConnection();
-    const [users] = await conn.query(
-      'SELECT * FROM users WHERE email = ? OR username = ? LIMIT 1',
-      [identifier, identifier]
-    );
-
-    if (users.length === 0) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
-    }
-
-    const user = users[0];
-    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
-      return res.status(401).json({ success: false, error: 'Invalid credentials.' });
-    }
-
-    const token = generateToken(user);
-    res.json({
-      success: true,
-      token,
-      user: { id: user.id, username: user.username, email: user.email, role: user.role }
-    });
-  } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ success: false, error: 'Internal login error.' });
-  } finally {
-    if (conn) await conn.end();
-  }
-};
-
-// 2. Initial Setup or Register Admin
-exports.register = async (req, res) => {
-  let conn;
-  try {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) {
-      return res.status(400).json({ success: false, error: 'Username, email and password are required.' });
-    }
-
-    conn = await getMasterConnection();
-    const [existing] = await conn.query('SELECT COUNT(*) as count FROM users');
-    const userCount = existing[0].count;
-
-    const allowReg = process.env.ALLOW_REGISTRATION === 'true';
-    if (userCount > 0 && !allowReg) {
-      return res.status(403).json({ success: false, error: 'Registration is closed. Existing admin exists.' });
-    }
-
-    const [dup] = await conn.query('SELECT id FROM users WHERE email = ? OR username = ?', [email, username]);
-    if (dup.length > 0) {
-      return res.status(409).json({ success: false, error: 'User with this email or username already exists.' });
-    }
-
-    const pHash = hashPassword(password);
-    const role = userCount === 0 ? 'admin' : 'user';
-
-    const [result] = await conn.query(
-      'INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
-      [username, email, pHash, role]
-    );
-
-    const newUser = { id: result.insertId, username, email, role };
-    const token = generateToken(newUser);
-
-    res.json({
-      success: true,
-      message: 'Account registered successfully.',
-      token,
-      user: newUser
-    });
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ success: false, error: 'Failed to register account.' });
-  } finally {
-    if (conn) await conn.end();
-  }
-};
-
-// 3. Check Auth Status (Is Setup Required?)
+// 1. Check Auth Status & Google OAuth Config
 exports.getAuthStatus = async (req, res) => {
   let conn;
   try {
@@ -134,8 +32,8 @@ exports.getAuthStatus = async (req, res) => {
     res.json({
       success: true,
       hasAdmin,
-      allowRegistration: hasAdmin ? (process.env.ALLOW_REGISTRATION === 'true') : true,
-      googleAuthEnabled: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID)
+      googleAuthEnabled: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID),
+      googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || ''
     });
   } catch (err) {
     console.error('Auth status error:', err);
@@ -145,7 +43,7 @@ exports.getAuthStatus = async (req, res) => {
   }
 };
 
-// 4. Current User Info
+// 2. Current User Profile
 exports.getMe = async (req, res) => {
   let conn;
   try {
@@ -162,48 +60,71 @@ exports.getMe = async (req, res) => {
   }
 };
 
-// 5. Google OAuth Login
+// 3. Google OAuth Login & Bootstrap
 exports.googleLogin = async (req, res) => {
-  if (!client) {
-    return res.status(400).json({ success: false, error: 'Google OAuth is not configured.' });
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  if (!clientId) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Google OAuth is not configured. Please set GOOGLE_OAUTH_CLIENT_ID in your .env file.' 
+    });
   }
+
+  const client = new OAuth2Client(clientId);
   let conn;
   try {
     const { token } = req.body;
     if (!token) {
-      return res.status(400).json({ success: false, error: 'Token is required.' });
+      return res.status(400).json({ success: false, error: 'Google credential token is required.' });
     }
 
+    // Verify token with Google
     const ticket = await client.verifyIdToken({
       idToken: token,
-      audience: process.env.GOOGLE_OAUTH_CLIENT_ID,
+      audience: clientId,
     });
     const payload = ticket.getPayload();
-    const { email, sub: google_sub } = payload;
+    const { email, name, sub: google_sub } = payload;
 
     conn = await getMasterConnection();
     const [users] = await conn.query('SELECT * FROM users WHERE email = ?', [email]);
     let user = users[0];
 
     if (!user) {
-      const allowRegistration = process.env.GOOGLE_OAUTH_ALLOW_SIGNUP === 'true';
+      // Check if this is the first user (bootstrap primary admin)
+      const [existingUsers] = await conn.query('SELECT COUNT(*) as count FROM users');
+      const isFirstUser = existingUsers[0].count === 0;
+
+      const allowSignup = process.env.GOOGLE_OAUTH_ALLOW_SIGNUP === 'true';
       const allowedEmails = process.env.GOOGLE_OAUTH_ALLOWED_EMAILS 
-        ? process.env.GOOGLE_OAUTH_ALLOWED_EMAILS.split(',').map(e => e.trim()) 
+        ? process.env.GOOGLE_OAUTH_ALLOWED_EMAILS.split(',').map(e => e.trim().toLowerCase()) 
+        : [];
+      const allowedDomains = process.env.GOOGLE_OAUTH_ALLOWED_DOMAINS 
+        ? process.env.GOOGLE_OAUTH_ALLOWED_DOMAINS.split(',').map(d => d.trim().toLowerCase()) 
         : [];
 
-      const isAllowed = allowRegistration || (allowedEmails.length > 0 && allowedEmails.includes(email));
-      if (!isAllowed) {
-        return res.status(403).json({ success: false, error: 'Unauthorized email.' });
+      const emailDomain = email.split('@')[1] ? email.split('@')[1].toLowerCase() : '';
+      const isWhitelisted = allowedEmails.includes(email.toLowerCase()) || (allowedDomains.length > 0 && allowedDomains.includes(emailDomain));
+
+      if (!isFirstUser && !allowSignup && !isWhitelisted) {
+        return res.status(403).json({ 
+          success: false, 
+          error: `Unauthorized email (${email}). Access is restricted to registered administrators.` 
+        });
       }
+
+      const role = 'admin';
+      const username = name || email.split('@')[0];
 
       const [result] = await conn.query(
         'INSERT INTO users (username, email, google_sub, role) VALUES (?, ?, ?, ?)',
-        [email.split('@')[0], email, google_sub, 'admin']
+        [username, email, google_sub, role]
       );
       
-      user = { id: result.insertId, username: email.split('@')[0], email, google_sub, role: 'admin' };
+      user = { id: result.insertId, username, email, google_sub, role };
     } else if (!user.google_sub) {
       await conn.query('UPDATE users SET google_sub = ? WHERE id = ?', [google_sub, user.id]);
+      user.google_sub = google_sub;
     }
 
     const sessionToken = generateToken(user);
@@ -215,7 +136,7 @@ exports.googleLogin = async (req, res) => {
     });
   } catch (error) {
     console.error('Google OAuth Error:', error);
-    res.status(401).json({ success: false, error: 'Invalid Google token.' });
+    res.status(401).json({ success: false, error: 'Invalid Google authentication token.' });
   } finally {
     if (conn) await conn.end();
   }

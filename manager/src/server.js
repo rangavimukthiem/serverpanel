@@ -66,8 +66,15 @@ async function initDB(retries = 15, delay = 2000) {
         // Splitting by semicolon is basic; works for simple schemas without triggers/functions
         const statements = sql.split(';').filter(stmt => stmt.trim() !== '');
         for (const stmt of statements) {
-          await connection.query(stmt);
+          try {
+            await connection.query(stmt);
+          } catch (_) {}
         }
+        
+        // Ensure users columns exist if table already existed
+        try { await connection.query('ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE AFTER id'); } catch (_) {}
+        try { await connection.query('ALTER TABLE users ADD COLUMN google_sub VARCHAR(255) UNIQUE AFTER email'); } catch (_) {}
+        
         console.log('Master Database schema synchronized.');
       }
       
