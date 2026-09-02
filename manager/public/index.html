@@ -300,21 +300,26 @@
       <div id="tab-projects" class="tab-content" style="display: none;">
         <div class="page-header">
           <div>
-            <h1 class="page-title">Client Projects</h1>
-            <p class="page-subtitle">Track custom client deliverables and agency products.</p>
+            <h1 class="page-title">Client Projects &amp; Apps</h1>
+            <p class="page-subtitle">Deploy and manage custom client websites, Express apps, and services.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="open-deploy-project-btn">
+              <span>+</span> Deploy New Project
+            </button>
           </div>
         </div>
 
         <div class="table-container">
           <div class="table-header-row">
-            <div class="table-title">Active Projects</div>
+            <div class="table-title">Active Deployments</div>
           </div>
           <table>
             <thead>
               <tr>
-                <th>Project Name</th>
-                <th>Client</th>
-                <th>Type</th>
+                <th>Project Name / Domain</th>
+                <th>Git Repository / Source</th>
+                <th>Runtime</th>
                 <th>Status</th>
                 <th>Created</th>
               </tr>
@@ -469,6 +474,78 @@
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="cancel-tenant-modal-btn">Cancel</button>
           <button type="submit" class="btn btn-primary" id="submit-tenant-btn">Provision Tenant</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Deploy Project Modal -->
+  <div class="modal-backdrop" id="project-modal-backdrop">
+    <div class="modal" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title">Deploy New Project / Express App</div>
+        <button type="button" class="modal-close" id="close-project-modal-btn">&times;</button>
+      </div>
+      <form id="deploy-project-form">
+        <div class="form-group">
+          <label class="form-label" for="project-name-input">Project Name</label>
+          <input type="text" id="project-name-input" class="form-input" placeholder="e.g. AnnexLK Web Platform" required>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="project-slug-input">Project Slug</label>
+            <input type="text" id="project-slug-input" class="form-input mono" placeholder="e.g. annexlk" required pattern="[a-zA-Z0-9-]+" title="Only alphanumeric characters and hyphens allowed">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="project-domain-input">Target Domain / URL</label>
+            <input type="text" id="project-domain-input" class="form-input mono" placeholder="e.g. annexlk.lk or annex.ekafy.com" required>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="project-git-input">Git Repository URL (HTTPS)</label>
+            <input type="url" id="project-git-input" class="form-input mono" placeholder="https://github.com/user/repo.git">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="project-branch-input">Git Branch</label>
+            <input type="text" id="project-branch-input" class="form-input mono" value="main" placeholder="main">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="project-runtime-select">Runtime Framework</label>
+            <select id="project-runtime-select" class="form-select">
+              <option value="node_express">Node.js / Express App</option>
+              <option value="static">Static HTML / React / Vue</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="project-port-input">App Port</label>
+            <input type="number" id="project-port-input" class="form-input mono" value="3000" min="1" max="65535">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.25rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: #fff; cursor: pointer;">
+            <input type="checkbox" id="project-db-checkbox" checked style="accent-color: var(--primary);">
+            <span>Automatically create dedicated isolated database (<code class="mono" style="color: var(--primary);">db_tenant_[slug]</code>)</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="project-env-input">Custom Environment Variables (Optional)</label>
+          <textarea id="project-env-input" class="form-input mono" style="height: 70px; resize: vertical; font-size: 0.8rem;" placeholder="API_KEY=xyz123&#10;CUSTOM_VAR=value"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancel-project-modal-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submit-project-btn">Deploy Project</button>
         </div>
       </form>
     </div>

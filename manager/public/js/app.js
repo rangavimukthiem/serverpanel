@@ -361,19 +361,30 @@ async function loadProjects() {
 function renderProjects() {
   const tbody = document.getElementById('projects-tbody');
   if (State.projects.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-dim);">No agency projects recorded yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-dim);">No active project deployments yet. Click "+ Deploy New Project" to launch an app.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = State.projects.map(p => `
-    <tr>
-      <td style="font-weight: 600; color: #fff;">${p.name}</td>
-      <td>${p.client_name || 'Direct Client'}</td>
-      <td><span class="badge badge-primary">${p.project_type.toUpperCase()}</span></td>
-      <td><span class="badge badge-success">${p.status.replace(/_/g, ' ')}</span></td>
-      <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(p.created_at).toLocaleDateString()}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = State.projects.map(p => {
+    const isGit = p.git_repo_url && p.git_repo_url.startsWith('http');
+    const domain = isGit ? (p.domain || p.name) : p.git_repo_url;
+    const projectUrl = domain && !domain.startsWith('http') ? `https://${domain}` : domain;
+
+    return `
+      <tr>
+        <td>
+          <div style="font-weight: 600; color: #fff;">${p.name}</div>
+          ${domain ? `<a href="${projectUrl}" target="_blank" style="font-size: 0.78rem; color: var(--primary); text-decoration: none;">${domain} ↗</a>` : ''}
+        </td>
+        <td>
+          <span class="mono" style="font-size: 0.78rem; color: #94a3b8;">${isGit ? p.git_repo_url : 'Local Directory'}</span>
+        </td>
+        <td><span class="badge badge-primary">${(p.project_type || 'EXPRESS').toUpperCase()}</span></td>
+        <td><span class="badge badge-success"><span class="pulse-dot"></span> ${p.status || 'Active'}</span></td>
+        <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(p.created_at).toLocaleDateString()}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // 6. Load Databases & SQL Console
@@ -509,52 +520,118 @@ async function loadBackups() {
 
 // Modal Handlers
 function setupModals() {
-  const modalBackdrop = document.getElementById('tenant-modal-backdrop');
-  const openBtn = document.getElementById('open-create-tenant-btn');
-  const closeBtn = document.getElementById('close-tenant-modal-btn');
-  const cancelBtn = document.getElementById('cancel-tenant-modal-btn');
-  const form = document.getElementById('create-tenant-form');
+  // 1. Tenant Modal
+  const tenantModalBackdrop = document.getElementById('tenant-modal-backdrop');
+  const openTenantBtn = document.getElementById('open-create-tenant-btn');
+  const closeTenantBtn = document.getElementById('close-tenant-modal-btn');
+  const cancelTenantBtn = document.getElementById('cancel-tenant-modal-btn');
+  const tenantForm = document.getElementById('create-tenant-form');
 
-  if (!modalBackdrop) return;
+  if (tenantModalBackdrop) {
+    const openModal = () => tenantModalBackdrop.classList.add('open');
+    const closeModal = () => {
+      tenantModalBackdrop.classList.remove('open');
+      tenantForm.reset();
+    };
 
-  const openModal = () => modalBackdrop.classList.add('open');
-  const closeModal = () => {
-    modalBackdrop.classList.remove('open');
-    form.reset();
-  };
+    openTenantBtn.addEventListener('click', openModal);
+    closeTenantBtn.addEventListener('click', closeModal);
+    cancelTenantBtn.addEventListener('click', closeModal);
 
-  openBtn.addEventListener('click', openModal);
-  closeBtn.addEventListener('click', closeModal);
-  cancelBtn.addEventListener('click', closeModal);
+    tenantForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-tenant-btn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Provisioning Database...';
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const submitBtn = document.getElementById('submit-tenant-btn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Provisioning Database...';
+      const name = document.getElementById('tenant-name-input').value.trim();
+      const subdomain = document.getElementById('tenant-subdomain-input').value.trim();
+      const plan = document.getElementById('tenant-plan-select').value;
 
-    const name = document.getElementById('tenant-name-input').value.trim();
-    const subdomain = document.getElementById('tenant-subdomain-input').value.trim();
-    const plan = document.getElementById('tenant-plan-select').value;
-
-    try {
-      const res = await API.post('/tenants', { name, subdomain, plan_type: plan });
-      if (res.success) {
-        showToast(`Tenant "${name}" successfully provisioned with dedicated database!`);
-        closeModal();
-        loadTenants();
-        loadStats();
-        loadDatabases();
-      } else {
-        alert(`Error: ${res.error || 'Failed to provision tenant'}`);
+      try {
+        const res = await API.post('/tenants', { name, subdomain, plan_type: plan });
+        if (res.success) {
+          showToast(`Tenant "${name}" successfully provisioned with dedicated database!`);
+          closeModal();
+          loadTenants();
+          loadStats();
+          loadDatabases();
+        } else {
+          alert(`Error: ${res.error || 'Failed to provision tenant'}`);
+        }
+      } catch (err) {
+        alert('Network or server error while provisioning tenant.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Provision Tenant';
       }
-    } catch (err) {
-      alert('Network or server error while provisioning tenant.');
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Provision Tenant';
-    }
-  });
+    });
+  }
+
+  // 2. Project Deployment Wizard Modal
+  const projectModalBackdrop = document.getElementById('project-modal-backdrop');
+  const openProjectBtn = document.getElementById('open-deploy-project-btn');
+  const closeProjectBtn = document.getElementById('close-project-modal-btn');
+  const cancelProjectBtn = document.getElementById('cancel-project-modal-btn');
+  const projectForm = document.getElementById('deploy-project-form');
+
+  if (projectModalBackdrop && openProjectBtn) {
+    const openModal = () => projectModalBackdrop.classList.add('open');
+    const closeModal = () => {
+      projectModalBackdrop.classList.remove('open');
+      projectForm.reset();
+    };
+
+    openProjectBtn.addEventListener('click', openModal);
+    closeProjectBtn.addEventListener('click', closeModal);
+    cancelProjectBtn.addEventListener('click', closeModal);
+
+    projectForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submit-project-btn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Cloning & Deploying Container...';
+
+      const name = document.getElementById('project-name-input').value.trim();
+      const slug = document.getElementById('project-slug-input').value.trim();
+      const domain = document.getElementById('project-domain-input').value.trim();
+      const git_repo_url = document.getElementById('project-git-input').value.trim();
+      const git_branch = document.getElementById('project-branch-input').value.trim() || 'main';
+      const runtime_type = document.getElementById('project-runtime-select').value;
+      const port = document.getElementById('project-port-input').value;
+      const create_database = document.getElementById('project-db-checkbox').checked;
+      const env_vars = document.getElementById('project-env-input').value.trim();
+
+      try {
+        const res = await API.post('/projects/deploy', {
+          name,
+          slug,
+          domain,
+          git_repo_url,
+          git_branch,
+          runtime_type,
+          port,
+          create_database,
+          env_vars
+        });
+
+        if (res.success) {
+          showToast(`Project "${name}" deployed successfully! Live at https://${domain}`);
+          closeModal();
+          loadProjects();
+          loadDatabases();
+          loadStats();
+        } else {
+          alert(`Deployment Error: ${res.error || 'Failed to deploy project'}`);
+        }
+      } catch (err) {
+        alert('Server error during automated project deployment.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Deploy Project';
+      }
+    });
+  }
 }
 
 // Start

@@ -22,12 +22,16 @@ services:
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=${SSL_EMAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      # Dynamic File Provider for automated on-the-fly project routing
+      - "--providers.file.directory=/dynamic"
+      - "--providers.file.watch=true"
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./data/letsencrypt:/letsencrypt"
+      - "./data/dynamic:/dynamic:ro"
     networks:
       - ekafy-net
 
@@ -89,6 +93,10 @@ services:
       - GOOGLE_OAUTH_ALLOW_SIGNUP=${GOOGLE_OAUTH_ALLOW_SIGNUP}
       - GOOGLE_OAUTH_ALLOWED_EMAILS=${GOOGLE_OAUTH_ALLOWED_EMAILS}
       - GOOGLE_OAUTH_ALLOWED_DOMAINS=${GOOGLE_OAUTH_ALLOWED_DOMAINS}
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./data/dynamic:/app/dynamic"
+      - "./projects:/app/projects"
     labels:
       - "traefik.enable=true"
       # Routing for admin dashboard (e.g. admin.ekafy.com)
