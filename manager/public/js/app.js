@@ -53,6 +53,10 @@ const State = {
   stats: null,
   tenants: [],
   projects: [],
+  services: [],
+  databases: [],
+  users: [],
+  backups: [],
   user: null,
   refreshTimer: null
 };
@@ -88,7 +92,7 @@ function formatUptime(seconds) {
 }
 
 function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -121,12 +125,24 @@ async function initDashboard() {
 
   setupNavigation();
   setupModals();
+  setupSqlConsole();
+  setupLogsViewer();
+
   await loadStats();
+  await loadServices();
   await loadTenants();
   await loadProjects();
+  await loadDatabases();
+  await loadUsers();
+  await loadBackups();
 
   // Auto-refresh stats every 5 seconds
   State.refreshTimer = setInterval(loadStats, 5000);
+
+  document.getElementById('refresh-now-btn').addEventListener('click', () => {
+    loadStats();
+    showToast('Telemetry refreshed.');
+  });
 }
 
 // Navigation Tabs
@@ -146,8 +162,13 @@ function setupNavigation() {
       if (target) target.style.display = 'block';
 
       State.currentTab = tab;
+      if (tab === 'services') loadServices();
+      if (tab === 'logs') loadLogs();
       if (tab === 'tenants') loadTenants();
       if (tab === 'projects') loadProjects();
+      if (tab === 'databases') loadDatabases();
+      if (tab === 'users') loadUsers();
+      if (tab === 'backups') loadBackups();
     });
   });
 
@@ -157,7 +178,7 @@ function setupNavigation() {
   });
 }
 
-// Load Live Metrics
+// 1. Load Live Metrics
 async function loadStats() {
   try {
     const res = await API.get('/system/stats');
@@ -174,30 +195,88 @@ function renderMetrics() {
   if (!State.stats) return;
   const { server, metrics, cluster } = State.stats;
 
-  document.getElementById('metric-uptime').textContent = formatUptime(server.uptime);
+  // CPU
+  document.getElementById('metric-cpu-usage').textContent = `${metrics.cpuUsagePct}%`;
+  document.getElementById('metric-cpu-bar').style.width = `${metrics.cpuUsagePct}%`;
+  document.getElementById('metric-cpu-cores').textContent = `${metrics.cpuCount} Cores (${metrics.cpuModel.split(' ')[0]})`;
+
+  // Memory
   document.getElementById('metric-mem-usage').textContent = `${metrics.memory.usagePercentage}%`;
   document.getElementById('metric-mem-bar').style.width = `${metrics.memory.usagePercentage}%`;
   document.getElementById('metric-mem-details').textContent = `${formatBytes(metrics.memory.usedBytes)} / ${formatBytes(metrics.memory.totalBytes)}`;
   
-  document.getElementById('metric-tenants-count').textContent = cluster.tenants;
-  document.getElementById('metric-projects-count').textContent = cluster.projects;
+  // Disk & Uptime
+  document.getElementById('metric-disk-usage').textContent = `${metrics.disk.usagePercentage}%`;
+  document.getElementById('metric-uptime').textContent = formatUptime(server.uptime);
 
-  // Render Host Info
+  // Summaries
   document.getElementById('info-hostname').textContent = server.hostname;
+  document.getElementById('info-ip').textContent = server.serverIp;
   document.getElementById('info-os').textContent = server.platform;
   document.getElementById('info-node').textContent = server.nodeVersion;
+  document.getElementById('info-panel-domain').textContent = cluster.managerDomain;
   document.getElementById('info-load').textContent = metrics.loadAverage.map(l => l.toFixed(2)).join(', ');
 
-  // Render Cluster URLs
-  document.getElementById('domain-manager').textContent = cluster.managerDomain;
-  document.getElementById('domain-core').textContent = `*.${cluster.coreDomain}`;
-  document.getElementById('domain-webmin').textContent = cluster.webminDomain;
-  document.getElementById('domain-webmin-link').href = `https://${cluster.webminDomain}`;
+  document.getElementById('summary-tenants').textContent = cluster.tenants;
+  document.getElementById('summary-projects').textContent = cluster.projects;
+  document.getElementById('summary-users').textContent = cluster.users;
+  document.getElementById('summary-core-domain').textContent = `*.${cluster.coreDomain}`;
 }
 
-// Load Tenants Data
+// 2. Load Services
+async function loadServices() {
+  const container = document.getElementById('services-grid');
+  if (!container) return;
+
+  try {
+    const res = await API.get('/system/services');
+    if (res.success && res.data) {
+      State.services = res.data;
+      container.innerHTML = State.services.map(s => `
+        <div class="service-card">
+          <div class="service-info">
+            <div class="service-icon">${s.type === 'security' ? '🛡️' : (s.id === 'traefik' ? '🔀' : (s.id === 'mariadb' ? '🐬' : (s.id === 'redis' ? '⚡' : '🚀')))}</div>
+            <div>
+              <div class="service-name">${s.name}</div>
+              <div class="service-desc">${s.description}</div>
+              <div style="font-size: 0.72rem; color: var(--primary); margin-top: 0.2rem;" class="mono">Port: ${s.port}</div>
+            </div>
+          </div>
+          <span class="badge badge-success"><span class="pulse-dot"></span> Active</span>
+        </div>
+      `).join('');
+    }
+  } catch (err) {
+    container.innerHTML = '<div style="color: var(--danger);">Failed to load services.</div>';
+  }
+}
+
+// 3. Load System Logs
+async function loadLogs() {
+  const viewer = document.getElementById('log-viewer-box');
+  const service = document.getElementById('logs-service-select').value;
+  viewer.textContent = `Streaming logs for ${service}...`;
+
+  try {
+    const res = await API.get(`/system/logs?service=${service}&lines=50`);
+    if (res.success && res.data) {
+      viewer.innerHTML = res.data.map(l => `<div>${l}</div>`).join('');
+      viewer.scrollTop = viewer.scrollHeight;
+    }
+  } catch (err) {
+    viewer.textContent = 'Failed to fetch logs.';
+  }
+}
+
+function setupLogsViewer() {
+  document.getElementById('fetch-logs-btn').addEventListener('click', loadLogs);
+  document.getElementById('logs-service-select').addEventListener('change', loadLogs);
+}
+
+// 4. Load Tenants Data
 async function loadTenants() {
   const tbody = document.getElementById('tenants-tbody');
+  if (!tbody) return;
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem;">Loading tenants...</td></tr>';
 
   try {
@@ -249,7 +328,6 @@ function renderTenants() {
   }).join('');
 }
 
-// Toggle Tenant Status
 window.toggleTenantStatus = async function(id, nextStatus) {
   try {
     const res = await API.put(`/tenants/${id}/status`, { status: nextStatus });
@@ -263,7 +341,7 @@ window.toggleTenantStatus = async function(id, nextStatus) {
   }
 };
 
-// Load Projects Data
+// 5. Load Projects Data
 async function loadProjects() {
   const tbody = document.getElementById('projects-tbody');
   if (!tbody) return;
@@ -296,6 +374,137 @@ function renderProjects() {
       <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(p.created_at).toLocaleDateString()}</td>
     </tr>
   `).join('');
+}
+
+// 6. Load Databases & SQL Console
+async function loadDatabases() {
+  const tbody = document.getElementById('databases-tbody');
+  const select = document.getElementById('sql-target-db');
+  if (!tbody) return;
+
+  try {
+    const res = await API.get('/system/databases');
+    if (res.success && res.data) {
+      State.databases = res.data;
+      tbody.innerHTML = State.databases.map(d => `
+        <tr>
+          <td style="font-weight: 600; color: #fff;" class="mono">${d.name}</td>
+          <td><span class="badge ${d.type.includes('Master') ? 'badge-primary' : 'badge-accent'}">${d.type}</span></td>
+          <td>${d.tableCount} tables</td>
+          <td><span class="badge badge-success"><span class="pulse-dot"></span> Online</span></td>
+        </tr>
+      `).join('');
+
+      select.innerHTML = State.databases.map(d => `
+        <option value="${d.name}">${d.name} (${d.type})</option>
+      `).join('');
+    }
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load databases.</td></tr>';
+  }
+}
+
+function setupSqlConsole() {
+  const execBtn = document.getElementById('execute-sql-btn');
+  const queryInput = document.getElementById('sql-query-input');
+  const targetDb = document.getElementById('sql-target-db');
+  const resultsBox = document.getElementById('sql-results-container');
+
+  if (!execBtn) return;
+
+  execBtn.addEventListener('click', async () => {
+    const query = queryInput.value.trim();
+    if (!query) return;
+
+    execBtn.disabled = true;
+    execBtn.textContent = 'Executing...';
+    resultsBox.style.display = 'block';
+    resultsBox.innerHTML = '<div style="padding: 1rem; color: var(--text-dim);">Running query...</div>';
+
+    try {
+      const res = await API.post('/system/databases/query', {
+        database: targetDb.value,
+        query: query
+      });
+
+      if (res.success) {
+        if (res.columns && res.columns.length > 0) {
+          resultsBox.innerHTML = `
+            <table>
+              <thead>
+                <tr>${res.columns.map(c => `<th>${c}</th>`).join('')}</tr>
+              </thead>
+              <tbody>
+                ${res.rows.map(r => `
+                  <tr>${res.columns.map(c => `<td class="mono">${r[c] !== null ? r[c] : 'NULL'}</td>`).join('')}</tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else {
+          resultsBox.innerHTML = `<div style="padding: 1rem; color: var(--success);">Query executed successfully. Affected rows: ${res.rows[0].affectedRows}</div>`;
+        }
+      } else {
+        resultsBox.innerHTML = `<div style="padding: 1rem; color: var(--danger);">SQL Error: ${res.error}</div>`;
+      }
+    } catch (err) {
+      resultsBox.innerHTML = `<div style="padding: 1rem; color: var(--danger);">Failed to execute query.</div>`;
+    } finally {
+      execBtn.disabled = false;
+      execBtn.textContent = 'Execute SQL';
+    }
+  });
+}
+
+// 7. Load Users
+async function loadUsers() {
+  const tbody = document.getElementById('users-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await API.get('/system/users');
+    if (res.success && res.data) {
+      State.users = res.data;
+      tbody.innerHTML = State.users.map(u => `
+        <tr>
+          <td style="font-weight: 600; color: #fff;">${u.username || u.email.split('@')[0]}</td>
+          <td>${u.email}</td>
+          <td><span class="badge ${u.role === 'admin' ? 'badge-primary' : 'badge-accent'}">${u.role.toUpperCase()}</span></td>
+          <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(u.created_at).toLocaleDateString()}</td>
+        </tr>
+      `).join('');
+    }
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color: var(--danger);">Failed to load users.</td></tr>';
+  }
+}
+
+// 8. Load Backups
+async function loadBackups() {
+  const tbody = document.getElementById('backups-tbody');
+  const targetLabel = document.getElementById('backup-storage-target');
+  if (!tbody) return;
+
+  try {
+    const res = await API.get('/system/backups');
+    if (res.success) {
+      if (res.storageTarget) targetLabel.textContent = res.storageTarget;
+      State.backups = res.data || [];
+      if (State.backups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 2rem; color: var(--text-dim);">No backup snapshots found in /app/backups.</td></tr>';
+      } else {
+        tbody.innerHTML = State.backups.map(b => `
+          <tr>
+            <td class="mono" style="color: #fff;">${b.filename}</td>
+            <td>${formatBytes(b.sizeBytes)}</td>
+            <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(b.createdAt).toLocaleString()}</td>
+          </tr>
+        `).join('');
+      }
+    }
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="3" style="color: var(--danger);">Failed to load backups.</td></tr>';
+  }
 }
 
 // Modal Handlers
@@ -335,6 +544,7 @@ function setupModals() {
         closeModal();
         loadTenants();
         loadStats();
+        loadDatabases();
       } else {
         alert(`Error: ${res.error || 'Failed to provision tenant'}`);
       }

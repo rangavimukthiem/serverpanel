@@ -3,11 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EKAFY Server Manager</title>
+  <title>EKAFY Server Manager - Control Panel</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .log-viewer {
+      background: #040711;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: 0.825rem;
+      padding: 1rem;
+      height: 400px;
+      overflow-y: auto;
+      color: #94a3b8;
+      line-height: 1.6;
+    }
+    .sql-editor {
+      width: 100%;
+      height: 100px;
+      background: #040711;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: #38bdf8;
+      font-family: var(--font-mono);
+      padding: 0.85rem;
+      font-size: 0.9rem;
+      resize: vertical;
+    }
+    .sql-results {
+      max-height: 250px;
+      overflow: auto;
+      margin-top: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+    }
+  </style>
 </head>
 <body>
 
@@ -18,25 +51,37 @@
         <div class="brand-icon">E</div>
         <div>
           <div class="brand-title">EKAFY</div>
-          <div class="brand-subtitle">Server Manager</div>
+          <div class="brand-subtitle">Control Panel</div>
         </div>
       </div>
 
       <div class="nav-section">
         <div class="nav-header">Platform Management</div>
         <a class="nav-item active" data-tab="overview">
-          <span class="nav-icon">📊</span> Overview &amp; Metrics
+          <span class="nav-icon">📊</span> Overview
+        </a>
+        <a class="nav-item" data-tab="services">
+          <span class="nav-icon">⚙️</span> Services
+        </a>
+        <a class="nav-item" data-tab="logs">
+          <span class="nav-icon">📜</span> System Logs
         </a>
         <a class="nav-item" data-tab="tenants">
           <span class="nav-icon">🏢</span> SaaS Tenants
         </a>
         <a class="nav-item" data-tab="projects">
-          <span class="nav-icon">📁</span> Client Projects
+          <span class="nav-icon">📁</span> Projects
         </a>
 
-        <div class="nav-header" style="margin-top: 1rem;">Infrastructure</div>
-        <a class="nav-item" data-tab="infrastructure">
-          <span class="nav-icon">⚙️</span> Cluster &amp; Domains
+        <div class="nav-header" style="margin-top: 0.75rem;">Data &amp; Administration</div>
+        <a class="nav-item" data-tab="databases">
+          <span class="nav-icon">🗄️</span> Databases
+        </a>
+        <a class="nav-item" data-tab="backups">
+          <span class="nav-icon">💾</span> Backups
+        </a>
+        <a class="nav-item" data-tab="users">
+          <span class="nav-icon">👥</span> Users &amp; Access
         </a>
       </div>
 
@@ -44,7 +89,7 @@
         <div class="user-badge">
           <div class="user-avatar" id="nav-user-avatar">A</div>
           <div class="user-details">
-            <div class="user-name" id="nav-username">Admin</div>
+            <div class="user-name" id="nav-username">Administrator</div>
             <div class="user-role" id="nav-user-email">admin@ekafy.com</div>
           </div>
         </div>
@@ -59,18 +104,31 @@
       <div id="tab-overview" class="tab-content">
         <div class="page-header">
           <div>
-            <h1 class="page-title">Cluster Overview</h1>
-            <p class="page-subtitle">Real-time status and telemetry of your EKAFY VPS infrastructure.</p>
+            <h1 class="page-title">Dashboard Overview</h1>
+            <p class="page-subtitle">Real-time telemetry and cluster operational health.</p>
           </div>
           <div class="header-actions">
+            <button class="btn btn-secondary btn-sm" id="refresh-now-btn">↺ Refresh</button>
             <span class="badge badge-success">
-              <span class="pulse-dot"></span> System Live
+              <span class="pulse-dot"></span> Cluster Operational
             </span>
           </div>
         </div>
 
-        <!-- Metrics Grid -->
+        <!-- 4 Key Metrics Meters -->
         <div class="grid-metrics">
+          <div class="card">
+            <div class="metric-header">
+              <span class="metric-label">CPU Usage</span>
+              <div class="metric-icon">⚡</div>
+            </div>
+            <div class="metric-value" id="metric-cpu-usage">--%</div>
+            <div class="progress-track">
+              <div class="progress-bar" id="metric-cpu-bar" style="width: 0%;"></div>
+            </div>
+            <div class="metric-sub" id="metric-cpu-cores">-- Cores</div>
+          </div>
+
           <div class="card">
             <div class="metric-header">
               <span class="metric-label">Memory Usage</span>
@@ -85,105 +143,124 @@
 
           <div class="card">
             <div class="metric-header">
-              <span class="metric-label">Server Uptime</span>
+              <span class="metric-label">Disk Storage</span>
+              <div class="metric-icon">💽</div>
+            </div>
+            <div class="metric-value" id="metric-disk-usage">--%</div>
+            <div class="progress-track">
+              <div class="progress-bar" id="metric-disk-bar" style="width: 28%; background: linear-gradient(90deg, #34d399, #38bdf8);"></div>
+            </div>
+            <div class="metric-sub">NVMe Storage Pool</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-header">
+              <span class="metric-label">Host Uptime</span>
               <div class="metric-icon">⏱️</div>
             </div>
             <div class="metric-value" id="metric-uptime">--</div>
-            <div class="metric-sub">Continuous operation</div>
-          </div>
-
-          <div class="card">
-            <div class="metric-header">
-              <span class="metric-label">Active Tenants</span>
-              <div class="metric-icon">🏢</div>
-            </div>
-            <div class="metric-value" id="metric-tenants-count">0</div>
-            <div class="metric-sub">Dedicated customer databases</div>
-          </div>
-
-          <div class="card">
-            <div class="metric-header">
-              <span class="metric-label">Agency Projects</span>
-              <div class="metric-icon">📁</div>
-            </div>
-            <div class="metric-value" id="metric-projects-count">0</div>
-            <div class="metric-sub">Prebuilt &amp; custom builds</div>
+            <div class="metric-sub">Continuous runtime</div>
           </div>
         </div>
 
-        <!-- Cluster Services Status -->
-        <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem;">Core Cluster Services</h2>
-        <div class="cluster-grid">
-          <div class="service-card">
-            <div class="service-info">
-              <div class="service-icon">🔀</div>
+        <!-- Server Details & Summaries Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+          
+          <div class="card">
+            <h2 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 1rem;">Server Information</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.85rem;">
               <div>
-                <div class="service-name">Traefik Edge Proxy</div>
-                <div class="service-desc">Auto SSL &amp; Dynamic Subdomain Routing</div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">HOSTNAME</span>
+                <span id="info-hostname" class="mono">--</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">SERVER IP</span>
+                <span id="info-ip" class="mono">--</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">OPERATING SYSTEM</span>
+                <span id="info-os">--</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">NODE.JS RUNTIME</span>
+                <span id="info-node" class="mono">--</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">PANEL DOMAIN</span>
+                <span id="info-panel-domain" class="mono" style="color: var(--primary);">--</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">LOAD AVERAGE</span>
+                <span id="info-load" class="mono">--</span>
               </div>
             </div>
-            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
           </div>
 
-          <div class="service-card">
-            <div class="service-info">
-              <div class="service-icon">🐬</div>
+          <div class="card">
+            <h2 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 1rem;">Platform Summary</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; font-size: 0.85rem;">
               <div>
-                <div class="service-name">MariaDB Master Engine</div>
-                <div class="service-desc">Multi-tenant schema &amp; tenant databases</div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">TOTAL TENANTS</span>
+                <span id="summary-tenants" style="font-size: 1.25rem; font-weight: 800; color: #fff;">0</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">AGENCY PROJECTS</span>
+                <span id="summary-projects" style="font-size: 1.25rem; font-weight: 800; color: #fff;">0</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">REGISTERED USERS</span>
+                <span id="summary-users" style="font-size: 1.25rem; font-weight: 800; color: #fff;">0</span>
+              </div>
+              <div>
+                <span style="color: var(--text-dim); display: block; font-size: 0.72rem;">CORE DOMAIN</span>
+                <span id="summary-core-domain" class="mono" style="color: var(--accent);">--</span>
               </div>
             </div>
-            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
           </div>
 
-          <div class="service-card">
-            <div class="service-info">
-              <div class="service-icon">⚡</div>
-              <div>
-                <div class="service-name">Redis In-Memory Store</div>
-                <div class="service-desc">High-speed session &amp; job cache</div>
-              </div>
-            </div>
-            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
-          </div>
-
-          <div class="service-card">
-            <div class="service-info">
-              <div class="service-icon">🚀</div>
-              <div>
-                <div class="service-name">EKAFY Core SaaS</div>
-                <div class="service-desc">Multi-tenant customer business engine</div>
-              </div>
-            </div>
-            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
-          </div>
-        </div>
-
-        <!-- Host Telemetry Info -->
-        <div class="card">
-          <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 1rem;">Host Environment Information</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.875rem;">
-            <div>
-              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">HOSTNAME</span>
-              <span id="info-hostname" class="mono">--</span>
-            </div>
-            <div>
-              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">PLATFORM</span>
-              <span id="info-os">--</span>
-            </div>
-            <div>
-              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">LOAD AVERAGE (1m, 5m, 15m)</span>
-              <span id="info-load" class="mono">--</span>
-            </div>
-            <div>
-              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">RUNTIME</span>
-              <span id="info-node" class="mono">--</span>
-            </div>
-          </div>
         </div>
       </div>
 
-      <!-- ── TAB 2: TENANTS ── -->
+      <!-- ── TAB 2: SERVICES ── -->
+      <div id="tab-services" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Services &amp; Infrastructure</h1>
+            <p class="page-subtitle">Manage runtime containers, reverse proxy, and core infrastructure.</p>
+          </div>
+        </div>
+
+        <div class="cluster-grid" id="services-grid">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- ── TAB 3: SYSTEM LOGS ── -->
+      <div id="tab-logs" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">System Logs</h1>
+            <p class="page-subtitle">Inspect real-time logs across the entire container cluster.</p>
+          </div>
+          <div class="header-actions">
+            <select class="form-select" id="logs-service-select" style="width: 180px; padding: 0.4rem 0.75rem;">
+              <option value="all">All Services</option>
+              <option value="traefik">Traefik Proxy</option>
+              <option value="manager">Server Manager</option>
+              <option value="core">Core SaaS Engine</option>
+              <option value="mariadb">MariaDB Master</option>
+              <option value="redis">Redis Cache</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" id="fetch-logs-btn">Refresh Logs</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="log-viewer" id="log-viewer-box">Loading logs...</div>
+        </div>
+      </div>
+
+      <!-- ── TAB 4: TENANTS ── -->
       <div id="tab-tenants" class="tab-content" style="display: none;">
         <div class="page-header">
           <div>
@@ -199,7 +276,7 @@
 
         <div class="table-container">
           <div class="table-header-row">
-            <div class="table-title">Active Organizations</div>
+            <div class="table-title">Customer Organizations</div>
           </div>
           <table>
             <thead>
@@ -213,24 +290,24 @@
               </tr>
             </thead>
             <tbody id="tenants-tbody">
-              <!-- Rendered dynamically -->
+              <!-- Loaded dynamically -->
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- ── TAB 3: PROJECTS ── -->
+      <!-- ── TAB 5: PROJECTS ── -->
       <div id="tab-projects" class="tab-content" style="display: none;">
         <div class="page-header">
           <div>
             <h1 class="page-title">Client Projects</h1>
-            <p class="page-subtitle">Track custom developments and agency client deliveries.</p>
+            <p class="page-subtitle">Track custom client deliverables and agency products.</p>
           </div>
         </div>
 
         <div class="table-container">
           <div class="table-header-row">
-            <div class="table-title">Project Registry</div>
+            <div class="table-title">Active Projects</div>
           </div>
           <table>
             <thead>
@@ -243,52 +320,118 @@
               </tr>
             </thead>
             <tbody id="projects-tbody">
-              <!-- Rendered dynamically -->
+              <!-- Loaded dynamically -->
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- ── TAB 4: INFRASTRUCTURE & DOMAINS ── -->
-      <div id="tab-infrastructure" class="tab-content" style="display: none;">
+      <!-- ── TAB 6: DATABASES ── -->
+      <div id="tab-databases" class="tab-content" style="display: none;">
         <div class="page-header">
           <div>
-            <h1 class="page-title">Infrastructure &amp; Domains</h1>
-            <p class="page-subtitle">Configured host entrypoints and reverse proxy mapping.</p>
+            <h1 class="page-title">Database Management</h1>
+            <p class="page-subtitle">Explore isolated databases and execute administrative SQL queries.</p>
+          </div>
+        </div>
+
+        <div class="table-container" style="margin-bottom: 2rem;">
+          <div class="table-header-row">
+            <div class="table-title">Active Databases</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Database Name</th>
+                <th>Type</th>
+                <th>Tables</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="databases-tbody">
+              <!-- Loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- SQL Query Console -->
+        <div class="card">
+          <h2 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.75rem;">SQL Query Console</h2>
+          <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem;">
+            <select class="form-select" id="sql-target-db" style="max-width: 250px;">
+              <option value="ekafy_master">ekafy_master (Platform Master)</option>
+            </select>
+            <button class="btn btn-primary btn-sm" id="execute-sql-btn">Execute SQL</button>
+          </div>
+          <textarea class="sql-editor" id="sql-query-input" placeholder="SELECT * FROM tenants LIMIT 10;"></textarea>
+          <div class="sql-results" id="sql-results-container" style="display: none;"></div>
+        </div>
+      </div>
+
+      <!-- ── TAB 7: BACKUPS ── -->
+      <div id="tab-backups" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Backups &amp; Disaster Recovery</h1>
+            <p class="page-subtitle">Manage automated snapshots and cloud storage integrations.</p>
           </div>
         </div>
 
         <div class="card" style="margin-bottom: 1.5rem;">
-          <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;">Domain Routing Map</h2>
-          <div style="display: flex; flex-direction: column; gap: 1rem;">
-            
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
-              <div>
-                <div style="font-weight: 600; color: #fff;">Server Manager Dashboard</div>
-                <div class="mono" id="domain-manager" style="color: var(--primary);">dashboard.ekafy.com</div>
-              </div>
-              <span class="badge badge-success">HTTPS Active</span>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; color: #fff;">Cloud Storage Remote</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem;" id="backup-storage-target">Local Storage (/app/backups)</div>
             </div>
-
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
-              <div>
-                <div style="font-weight: 600; color: #fff;">Customer Apps Wildcard Core</div>
-                <div class="mono" id="domain-core" style="color: var(--accent);">*.ekafy.com</div>
-              </div>
-              <span class="badge badge-success">Auto Subdomain Routing</span>
-            </div>
-
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
-              <div>
-                <div style="font-weight: 600; color: #fff;">Webmin Host System Panel</div>
-                <div class="mono" id="domain-webmin" style="color: var(--warning);">panel.ekafy.com</div>
-              </div>
-              <a href="#" id="domain-webmin-link" target="_blank" class="btn btn-secondary btn-sm">
-                Open Webmin ↗
-              </a>
-            </div>
-
+            <span class="badge badge-success">Storage Ready</span>
           </div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-header-row">
+            <div class="table-title">Available Archives</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Archive Filename</th>
+                <th>Size</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="backups-tbody">
+              <!-- Loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── TAB 8: USERS ── -->
+      <div id="tab-users" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Users &amp; Access Control</h1>
+            <p class="page-subtitle">Manage administrator accounts and Google SSO permissions.</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-header-row">
+            <div class="table-title">Registered Accounts</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>User / Name</th>
+                <th>Email Address</th>
+                <th>Role</th>
+                <th>Joined</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <!-- Loaded dynamically -->
+            </tbody>
+          </table>
         </div>
       </div>
 
