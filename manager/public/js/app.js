@@ -393,21 +393,23 @@ function renderProjects() {
         </td>
         <td style="font-size: 0.8rem; color: var(--text-dim);">${new Date(p.created_at).toLocaleDateString()}</td>
         <td style="text-align: right; white-space: nowrap;">
-          ${isStopped ? `
-            <button class="btn btn-primary btn-sm" onclick="startProject(${p.id}, '${p.name}')" title="Start Container">
-              ▲ Up
+          <div style="display: inline-flex; gap: 0.4rem; align-items: center; justify-content: flex-end;">
+            ${isStopped ? `
+              <button class="btn btn-sm" style="background: #10b981; color: #fff; padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="startProject(${p.id}, '${p.name}')">
+                ▲ Start
+              </button>
+            ` : `
+              <button class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="stopProject(${p.id}, '${p.name}')">
+                ▼ Stop
+              </button>
+            `}
+            <button class="btn btn-secondary btn-sm" style="padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="restartProject(${p.id}, '${p.name}')">
+              ↺ Restart
             </button>
-          ` : `
-            <button class="btn btn-secondary btn-sm" onclick="stopProject(${p.id}, '${p.name}')" title="Stop Container">
-              ▼ Down
+            <button class="btn btn-sm" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; font-weight: 600; padding: 0.3rem 0.65rem; font-size: 0.75rem;" onclick="deleteProject(${p.id}, '${p.name}')">
+              🗑️ Delete
             </button>
-          `}
-          <button class="btn btn-secondary btn-sm" onclick="restartProject(${p.id}, '${p.name}')" title="Restart Container" style="margin-left: 0.25rem;">
-            ↺
-          </button>
-          <button class="btn btn-secondary btn-sm" onclick="deleteProject(${p.id}, '${p.name}')" title="Delete Project" style="margin-left: 0.25rem; color: var(--danger); border-color: rgba(239, 68, 68, 0.4);">
-            ✕
-          </button>
+          </div>
         </td>
       </tr>
     `;
