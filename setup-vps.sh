@@ -25,8 +25,10 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 # 2. System Updates & Essential Packages
-echo -e "${YELLOW}Step 1: System Updates & Automatic Patching...${NC}"
-apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+# Clean up any malformed docker.com repo entries if present
+grep -l "docker.com jammy" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null | xargs sed -i '/docker\.com jammy/d' 2>/dev/null || true
+apt-get update || true
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y fail2ban ufw unattended-upgrades curl wget git
 # Enable unattended-upgrades silently
 dpkg-reconfigure --priority=low unattended-upgrades || true
@@ -169,18 +171,50 @@ if [ ! -f ".env" ]; then
     echo -e "  - SSL Email:      ${EMAIL}"
 else
     echo -e "${GREEN}✓ Existing .env file found.${NC}"
+    # Replace any leftover default placeholder passwords in existing .env
+    gen_secret() {
+        if command -v openssl &> /dev/null; then
+            openssl rand -hex 16
+        else
+            tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32
+        fi
+    }
+    gen_jwt() {
+        if command -v openssl &> /dev/null; then
+            openssl rand -base64 32
+        else
+            tr -dc 'A-Za-z0-9_=-' < /dev/urandom | head -c 44
+        fi
+    }
+    if grep -q "your_secure_root_password" .env; then
+        sed -i "s|^DB_ROOT_PASSWORD=your_secure_root_password|DB_ROOT_PASSWORD=$(gen_secret)|" .env
+        sed -i "s|^DB_ADMIN_PASSWORD=your_secure_admin_password|DB_ADMIN_PASSWORD=$(gen_secret)|" .env
+        sed -i "s|^REDIS_PASSWORD=your_secure_redis_password|REDIS_PASSWORD=$(gen_secret)|" .env
+        sed -i "s|^JWT_SECRET=your_secure_random_jwt_secret|JWT_SECRET=$(gen_jwt)|" .env
+        echo -e "${GREEN}✓ Replaced placeholder passwords in .env with secure random credentials.${NC}"
+    fi
 fi
 
-# 9. Persistent Storage Prep
-echo -e "${YELLOW}Step 9: Preparing Persistent Data Directories...${NC}"
+# 9. Free Port 80 & 443 from Host Web Servers
+echo -e "${YELLOW}Step 9: Ensuring Ports 80 & 443 are free for Traefik...${NC}"
+for svc in apache2 nginx httpd caddy lighttpd; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        echo -e "${YELLOW}Stopping and disabling host $svc to free port 80/443 for Traefik...${NC}"
+        systemctl stop "$svc" || true
+        systemctl disable "$svc" || true
+    fi
+done
+
+# 10. Persistent Storage Prep
+echo -e "${YELLOW}Step 10: Preparing Persistent Data Directories...${NC}"
 mkdir -p data/mariadb
 mkdir -p data/redis
 mkdir -p data/letsencrypt
 touch data/letsencrypt/acme.json
 chmod 600 data/letsencrypt/acme.json
 
-# 10. Spin up cluster
-echo -e "${YELLOW}Step 10: Starting the EKAFY Cluster via Docker Compose...${NC}"
+# 11. Spin up cluster
+echo -e "${YELLOW}Step 11: Starting the EKAFY Cluster via Docker Compose...${NC}"
 docker compose up -d --build
 
 echo -e "${GREEN}==========================================${NC}"
