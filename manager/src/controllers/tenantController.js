@@ -1,34 +1,34 @@
 const mysql = require('mysql2/promise');
-const fs = require('fs');
-const path = require('path');
 
-// Reference the master pool created in server.js
-// We'll create a dedicated connection here for the DDL operations
-const getMasterConnection = async () => {
+const getAdminConnection = async (targetDb = 'ekafy_master') => {
+  const isRoot = Boolean(process.env.DB_ROOT_PASSWORD);
   return await mysql.createConnection({
     host: process.env.DB_HOST || 'mariadb',
     port: process.env.DB_PORT || 3306,
-    user: process.env.DB_USER || 'ekafy_admin',
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME || 'ekafy_master',
-    multipleStatements: true // Required to execute the schema file
+    user: isRoot ? 'root' : (process.env.DB_USER || 'ekafy_admin'),
+    password: isRoot ? process.env.DB_ROOT_PASSWORD : process.env.DB_PASSWORD,
+    database: targetDb,
+    multipleStatements: true
   });
 };
 
 exports.getAllTenants = async (req, res) => {
+  let conn;
   try {
-    const conn = await getMasterConnection();
+    conn = await getAdminConnection('ekafy_master');
     const [tenants] = await conn.query('SELECT * FROM tenants ORDER BY created_at DESC');
-    await conn.end();
     res.json({ success: true, data: tenants });
   } catch (error) {
     console.error('Error fetching tenants:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch tenants' });
+  } finally {
+    if (conn) await conn.end();
   }
 };
 
 exports.provisionTenant = async (req, res) => {
   let conn;
+  let tenantConn;
   try {
     const { name, subdomain, plan_type } = req.body;
     
@@ -37,9 +37,13 @@ exports.provisionTenant = async (req, res) => {
     }
 
     const sanitizedSubdomain = subdomain.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    if (!sanitizedSubdomain) {
+      return res.status(400).json({ success: false, error: 'Invalid subdomain format' });
+    }
+
     const dbName = `db_tenant_${sanitizedSubdomain.replace(/-/g, '_')}`;
 
-    conn = await getMasterConnection();
+    conn = await getAdminConnection('ekafy_master');
     await conn.beginTransaction();
 
     // 1. Insert into Master DB
@@ -49,22 +53,17 @@ exports.provisionTenant = async (req, res) => {
     );
     const tenantId = result.insertId;
 
-    // 2. Create the Database for the new tenant
+    // 2. Create the dedicated Database for the new tenant
     await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
 
-    // 3. Connect specifically to the new database to provision the tables
-    const tenantConn = await mysql.createConnection({
-      host: process.env.DB_HOST || 'mariadb',
-      port: process.env.DB_PORT || 3306,
-      user: process.env.DB_USER || 'ekafy_admin',
-      password: process.env.DB_PASSWORD,
-      database: dbName,
-      multipleStatements: true
-    });
+    // 3. Grant privileges to ekafy_admin on the new tenant database
+    try {
+      await conn.query(`GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${process.env.DB_USER || 'ekafy_admin'}'@'%'`);
+      await conn.query(`FLUSH PRIVILEGES`);
+    } catch (_) {}
 
-    // 4. Load and execute the blueprint schema
-    // In a Docker environment, we need to ensure this path is correct. 
-    // To avoid cross-container volume issues, we define the blueprint right here.
+    // 4. Connect to new database to provision blueprint tables
+    tenantConn = await getAdminConnection(dbName);
     const blueprintSql = `
       CREATE TABLE IF NOT EXISTS employees (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -116,6 +115,7 @@ exports.provisionTenant = async (req, res) => {
 
     await tenantConn.query(blueprintSql);
     await tenantConn.end();
+    tenantConn = null;
 
     await conn.commit();
 
@@ -127,18 +127,22 @@ exports.provisionTenant = async (req, res) => {
 
   } catch (error) {
     console.error('Error provisioning tenant:', error);
-    if (conn) await conn.rollback();
+    if (conn) {
+      try { await conn.rollback(); } catch (_) {}
+    }
     
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ success: false, error: 'Subdomain already exists' });
     }
-    res.status(500).json({ success: false, error: 'Failed to provision tenant' });
+    res.status(500).json({ success: false, error: error.message || 'Failed to provision tenant' });
   } finally {
+    if (tenantConn) await tenantConn.end();
     if (conn) await conn.end();
   }
 };
 
 exports.updateTenantStatus = async (req, res) => {
+  let conn;
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -148,9 +152,8 @@ exports.updateTenantStatus = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid status' });
     }
 
-    const conn = await getMasterConnection();
+    conn = await getAdminConnection('ekafy_master');
     const [result] = await conn.query('UPDATE tenants SET status = ? WHERE id = ?', [status, id]);
-    await conn.end();
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, error: 'Tenant not found' });
@@ -160,5 +163,7 @@ exports.updateTenantStatus = async (req, res) => {
   } catch (error) {
     console.error('Error updating tenant status:', error);
     res.status(500).json({ success: false, error: 'Failed to update tenant status' });
+  } finally {
+    if (conn) await conn.end();
   }
 };

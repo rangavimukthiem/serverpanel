@@ -75,6 +75,7 @@ services:
       - DB_PORT=3306
       - DB_USER=ekafy_admin
       - DB_PASSWORD=${DB_ADMIN_PASSWORD}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
       - DB_NAME=ekafy_master
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD}
