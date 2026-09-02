@@ -170,25 +170,89 @@ exports.getServices = async (req, res) => {
   }
 };
 
-// 3. System Logs
+// 2b. Control Service Actions (Restart / Start / Stop)
+exports.controlService = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body; // 'restart', 'start', 'stop'
+
+    if (!['restart', 'start', 'stop'].includes(action)) {
+      return res.status(400).json({ success: false, error: 'Invalid action. Must be restart, start, or stop' });
+    }
+
+    const containerMap = {
+      traefik: 'ekafy-traefik',
+      mariadb: 'ekafy-mariadb',
+      redis: 'ekafy-redis',
+      core: 'ekafy-core',
+      manager: 'ekafy-manager',
+      webmin: 'ekafy-webmin-proxy'
+    };
+
+    const containerName = containerMap[id];
+    if (!containerName) {
+      return res.status(400).json({ success: false, error: `Service "${id}" is a host security layer or unknown container` });
+    }
+
+    const util = require('util');
+    const execPromise = util.promisify(exec);
+
+    console.log(`[Service Controller] Running docker ${action} ${containerName}...`);
+    await execPromise(`docker ${action} ${containerName}`);
+
+    res.json({
+      success: true,
+      message: `Service "${id}" (${containerName}) ${action}ed successfully!`
+    });
+  } catch (error) {
+    console.error('Service control error:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to control service' });
+  }
+};
+
+// 3. Live System Logs from Docker
 exports.getSystemLogs = async (req, res) => {
   try {
     const service = req.query.service || 'all';
     const lines = parseInt(req.query.lines, 10) || 50;
+    const util = require('util');
+    const execPromise = util.promisify(exec);
 
-    const timestamp = new Date().toISOString();
-    const sampleLogs = [
-      `[${timestamp}] [Traefik] Configuration loaded from flags. HTTP-01 challenge active.`,
-      `[${timestamp}] [Traefik] Routing rule registered: Host(dashboard.ekafy.com) -> ekafy-manager`,
-      `[${timestamp}] [Traefik] Routing rule registered: Host(panel.ekafy.com) -> ekafy-webmin-proxy`,
-      `[${timestamp}] [Traefik] Routing rule registered: Host(*.ekafy.com) -> ekafy-core`,
-      `[${timestamp}] [MariaDB] Server initialized. Ready for client connections on port 3306.`,
-      `[${timestamp}] [Redis] 1 clients connected. Server initialized with memory protection.`,
-      `[${timestamp}] [Manager] Master Database schema synchronized. Listening on port 3000.`,
-      `[${timestamp}] [Core SaaS] Multi-tenant dynamic resolver middleware online.`
-    ];
+    const containerMap = {
+      traefik: 'ekafy-traefik',
+      mariadb: 'ekafy-mariadb',
+      redis: 'ekafy-redis',
+      core: 'ekafy-core',
+      manager: 'ekafy-manager'
+    };
 
-    res.json({ success: true, service, data: sampleLogs });
+    let logLines = [];
+
+    if (service !== 'all' && containerMap[service]) {
+      try {
+        const { stdout, stderr } = await execPromise(`docker logs --tail=${lines} ${containerMap[service]} 2>&1`);
+        const raw = (stdout || '') + (stderr || '');
+        logLines = raw.split('\n').filter(Boolean);
+      } catch (err) {
+        logLines = [`Error reading logs for ${service}: ${err.message}`];
+      }
+    } else {
+      try {
+        const { stdout: traefikLogs } = await execPromise(`docker logs --tail=15 ekafy-traefik 2>&1 || true`);
+        const { stdout: managerLogs } = await execPromise(`docker logs --tail=15 ekafy-manager 2>&1 || true`);
+        const { stdout: coreLogs } = await execPromise(`docker logs --tail=15 ekafy-core 2>&1 || true`);
+        
+        logLines = [
+          ...(traefikLogs || '').split('\n').map(l => l ? `[Traefik] ${l}` : ''),
+          ...(managerLogs || '').split('\n').map(l => l ? `[Manager] ${l}` : ''),
+          ...(coreLogs || '').split('\n').map(l => l ? `[Core] ${l}` : '')
+        ].filter(Boolean);
+      } catch (_) {
+        logLines = [`[System] Cluster active and streaming.`];
+      }
+    }
+
+    res.json({ success: true, service, data: logLines.slice(-lines) });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to fetch logs' });
   }

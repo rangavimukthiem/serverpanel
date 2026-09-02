@@ -5,6 +5,7 @@ const { verifyToken, requireAdmin } = require('../middleware/authMiddleware');
 
 router.get('/stats', verifyToken, systemController.getSystemStats);
 router.get('/services', verifyToken, systemController.getServices);
+router.post('/services/:id/action', verifyToken, requireAdmin, systemController.controlService);
 router.get('/logs', verifyToken, systemController.getSystemLogs);
 router.get('/databases', verifyToken, requireAdmin, systemController.getDatabases);
 router.post('/databases/query', verifyToken, requireAdmin, systemController.runDatabaseQuery);

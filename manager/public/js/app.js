@@ -248,24 +248,74 @@ async function loadServices() {
     const res = await API.get('/system/services');
     if (res.success && res.data) {
       State.services = res.data;
-      container.innerHTML = State.services.map(s => `
-        <div class="service-card">
-          <div class="service-info">
-            <div class="service-icon">${s.type === 'security' ? '🛡️' : (s.id === 'traefik' ? '🔀' : (s.id === 'mariadb' ? '🐬' : (s.id === 'redis' ? '⚡' : '🚀')))}</div>
-            <div>
-              <div class="service-name">${s.name}</div>
-              <div class="service-desc">${s.description}</div>
-              <div style="font-size: 0.72rem; color: var(--primary); margin-top: 0.2rem;" class="mono">Port: ${s.port}</div>
+      container.innerHTML = State.services.map(s => {
+        const isContainer = s.type === 'container' || s.id === 'webmin';
+        return `
+        <div class="service-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+            <div class="service-info" style="gap: 0.85rem;">
+              <div class="service-icon">${s.type === 'security' ? '🛡️' : (s.id === 'traefik' ? '🔀' : (s.id === 'mariadb' ? '🐬' : (s.id === 'redis' ? '⚡' : (s.id === 'manager' ? '🎛️' : '🚀'))))}</div>
+              <div>
+                <div class="service-name" style="font-weight: 700; font-size: 0.95rem; color: #fff;">${s.name}</div>
+                <div class="service-desc" style="font-size: 0.78rem; color: var(--text-dim); margin-top: 0.2rem;">${s.description}</div>
+                <div style="font-size: 0.72rem; color: var(--primary); margin-top: 0.35rem;" class="mono">Port: ${s.port}</div>
+              </div>
             </div>
+            <span class="badge badge-success"><span class="pulse-dot"></span> Active</span>
           </div>
-          <span class="badge badge-success"><span class="pulse-dot"></span> Active</span>
+
+          <div style="display: flex; gap: 0.4rem; justify-content: flex-end; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.75rem; width: 100%;">
+            ${isContainer ? `
+              <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.3rem 0.65rem;" onclick="controlService('${s.id}', 'restart', '${s.name}')" title="Restart ${s.name}">
+                ↺ Restart
+              </button>
+              <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.3rem 0.65rem;" onclick="controlService('${s.id}', 'stop', '${s.name}')" title="Stop ${s.name}">
+                ▼ Stop
+              </button>
+            ` : ''}
+            <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem; padding: 0.3rem 0.65rem;" onclick="viewServiceLogs('${s.id}')" title="View Logs">
+              📜 Logs
+            </button>
+          </div>
         </div>
-      `).join('');
+        `;
+      }).join('');
     }
   } catch (err) {
     container.innerHTML = '<div style="color: var(--danger);">Failed to load services.</div>';
   }
 }
+
+window.controlService = async function(id, action, name) {
+  if (!confirm(`Are you sure you want to ${action.toUpperCase()} ${name}?`)) {
+    return;
+  }
+
+  showToast(`${action.toUpperCase()} command sent to ${name}...`);
+  try {
+    const res = await API.post(`/system/services/${id}/action`, { action });
+    if (res.success) {
+      showToast(`${name} ${action}ed successfully!`);
+      loadServices();
+      loadStats();
+    } else {
+      alert(`Service Control Error: ${res.error || 'Failed to control service'}`);
+    }
+  } catch (err) {
+    alert('Server error while controlling service.');
+  }
+};
+
+window.viewServiceLogs = function(serviceId) {
+  const logsNav = document.querySelector('.nav-item[data-tab="logs"]');
+  if (logsNav) logsNav.click();
+
+  const select = document.getElementById('logs-service-select');
+  if (select) {
+    select.value = serviceId;
+    loadLogs();
+  }
+};
 
 // 3. Load System Logs
 async function loadLogs() {
