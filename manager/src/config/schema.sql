@@ -46,15 +46,19 @@ CREATE TABLE IF NOT EXISTS clients (
 
 CREATE TABLE IF NOT EXISTS projects (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  client_id INT NOT NULL,
-  tenant_id INT, -- If it is a Prebuilt Product, it links to the tenant database
+  slug VARCHAR(120) UNIQUE,
   name VARCHAR(200) NOT NULL,
-  project_type ENUM('prebuilt', 'custom') NOT NULL,
-  status ENUM('pending_approval', 'in_development', 'deployed', 'suspended') DEFAULT 'pending_approval',
-  git_repo_url VARCHAR(500), -- Used if project_type = 'custom'
-  assigned_admin_id INT, -- The admin managing this project
+  domain VARCHAR(255),
+  port INT DEFAULT 3000,
+  db_name VARCHAR(120),
+  client_id INT NULL,
+  tenant_id INT NULL,
+  project_type VARCHAR(50) DEFAULT 'node_express',
+  status VARCHAR(50) DEFAULT 'deployed',
+  git_repo_url VARCHAR(500),
+  assigned_admin_id INT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
   FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL,
   FOREIGN KEY (assigned_admin_id) REFERENCES users(id) ON DELETE SET NULL
 );

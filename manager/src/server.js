@@ -75,6 +75,14 @@ async function initDB(retries = 15, delay = 2000) {
         try { await connection.query('ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE AFTER id'); } catch (_) {}
         try { await connection.query('ALTER TABLE users ADD COLUMN google_sub VARCHAR(255) UNIQUE AFTER email'); } catch (_) {}
         
+        // Ensure projects table supports standalone direct deployments
+        try { await connection.query('ALTER TABLE projects MODIFY COLUMN client_id INT NULL'); } catch (_) {}
+        try { await connection.query('ALTER TABLE projects MODIFY COLUMN project_type VARCHAR(50) DEFAULT "node_express"'); } catch (_) {}
+        try { await connection.query('ALTER TABLE projects ADD COLUMN slug VARCHAR(120) UNIQUE AFTER id'); } catch (_) {}
+        try { await connection.query('ALTER TABLE projects ADD COLUMN domain VARCHAR(255) AFTER name'); } catch (_) {}
+        try { await connection.query('ALTER TABLE projects ADD COLUMN port INT DEFAULT 3000 AFTER domain'); } catch (_) {}
+        try { await connection.query('ALTER TABLE projects ADD COLUMN db_name VARCHAR(120) AFTER port'); } catch (_) {}
+        
         // Grant wildcard permissions on all tenant databases to ekafy_admin
         try {
           await connection.query(`GRANT ALL PRIVILEGES ON \`db_tenant_%\`.* TO '${process.env.DB_USER || 'ekafy_admin'}'@'%'`);

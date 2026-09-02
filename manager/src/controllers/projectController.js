@@ -208,10 +208,10 @@ http:
     // 7. Save / Update Record in Master Database
     conn = await getMasterConnection();
     await conn.query(
-      `INSERT INTO projects (name, project_type, git_repo_url, status) 
-       VALUES (?, ?, ?, 'deployed')
-       ON DUPLICATE KEY UPDATE status = 'deployed'`,
-      [name, runtime_type, git_repo_url || cleanDomain]
+      `INSERT INTO projects (name, slug, domain, project_type, git_repo_url, port, db_name, status, assigned_admin_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'deployed', ?)
+       ON DUPLICATE KEY UPDATE domain = VALUES(domain), git_repo_url = VALUES(git_repo_url), status = 'deployed'`,
+      [name, cleanSlug, cleanDomain, runtime_type, git_repo_url || cleanDomain, appPort, create_database ? dbName : null, req.user ? req.user.id : null]
     );
 
     res.status(201).json({
