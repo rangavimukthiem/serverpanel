@@ -1,11 +1,12 @@
 const mysql = require('mysql2/promise');
 
 const getDbCredentials = () => {
+  const isRoot = Boolean(process.env.DB_ROOT_PASSWORD);
   return {
     host: process.env.MASTER_DB_HOST || process.env.DB_HOST || 'mariadb',
     port: process.env.MASTER_DB_PORT || process.env.DB_PORT || 3306,
-    user: process.env.MASTER_DB_USER || process.env.DB_USER || 'ekafy_admin',
-    password: process.env.MASTER_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_ADMIN_PASSWORD || process.env.DB_ROOT_PASSWORD
+    user: isRoot ? 'root' : (process.env.MASTER_DB_USER || process.env.DB_USER || 'ekafy_admin'),
+    password: isRoot ? process.env.DB_ROOT_PASSWORD : (process.env.MASTER_DB_PASSWORD || process.env.DB_PASSWORD || process.env.DB_ADMIN_PASSWORD)
   };
 };
 

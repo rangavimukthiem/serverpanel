@@ -75,6 +75,12 @@ async function initDB(retries = 15, delay = 2000) {
         try { await connection.query('ALTER TABLE users ADD COLUMN username VARCHAR(100) UNIQUE AFTER id'); } catch (_) {}
         try { await connection.query('ALTER TABLE users ADD COLUMN google_sub VARCHAR(255) UNIQUE AFTER email'); } catch (_) {}
         
+        // Grant wildcard permissions on all tenant databases to ekafy_admin
+        try {
+          await connection.query(`GRANT ALL PRIVILEGES ON \`db_tenant_%\`.* TO '${process.env.DB_USER || 'ekafy_admin'}'@'%'`);
+          await connection.query('FLUSH PRIVILEGES');
+        } catch (_) {}
+        
         console.log('Master Database schema synchronized.');
       }
       

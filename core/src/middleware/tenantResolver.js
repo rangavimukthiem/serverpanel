@@ -126,7 +126,7 @@ async function tenantResolver(req, res, next) {
     next();
   } catch (error) {
     console.error('[Tenant Resolver Error]:', error);
-    res.status(500).send('Internal Server Error while resolving tenant database.');
+    res.status(500).send(`Internal Server Error while resolving tenant database: ${error.message}`);
   }
 }
 
