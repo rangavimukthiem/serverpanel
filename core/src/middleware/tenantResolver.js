@@ -7,15 +7,18 @@ const { masterPool, getTenantPool } = require('../config/db');
  */
 async function tenantResolver(req, res, next) {
   try {
-    // 1. Extract hostname (e.g. restaurant-a.ekafy.com)
-    const host = req.get('host');
-    if (!host) {
+    // 1. Extract hostname (e.g. ekafyweb.ekafy.com)
+    const rawHost = req.get('host');
+    if (!rawHost) {
       return res.status(400).send('No Host header provided');
     }
 
-    // 2. Handle Root Domain (e.g. ekafy.com) or localhost without tenant subdomain
-    const coreDomain = process.env.CORE_DOMAIN || 'ekafy.com';
-    const isRootDomain = host === coreDomain || host === `www.${coreDomain}` || host === 'localhost' || parts.length < 3;
+    const host = rawHost.split(':')[0].toLowerCase();
+    const parts = host.split('.');
+    const coreDomain = (process.env.CORE_DOMAIN || 'ekafy.com').toLowerCase();
+
+    // 2. Handle Root Domain (e.g. ekafy.com, www.ekafy.com, localhost)
+    const isRootDomain = host === coreDomain || host === `www.${coreDomain}` || host === 'localhost' || parts.length < (coreDomain.split('.').length + 1);
 
     if (isRootDomain) {
       if (req.path === '/api/health') {
@@ -48,6 +51,7 @@ async function tenantResolver(req, res, next) {
       `);
     }
 
+    // Extract subdomain: for "ekafyweb.ekafy.com" -> "ekafyweb"
     const subdomain = parts[0];
 
     // 3. Lookup Tenant in Master Database
@@ -57,13 +61,53 @@ async function tenantResolver(req, res, next) {
     );
 
     if (rows.length === 0) {
-      return res.status(404).send('Tenant not found');
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>Tenant Not Found - EKAFY</title>
+          <style>
+            body { font-family: sans-serif; background: #0b0f19; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; text-align: center; }
+            .card { background: #111827; padding: 2.5rem; border-radius: 1rem; border: 1px solid #1f2937; max-width: 440px; }
+            h1 { color: #f87171; font-size: 1.5rem; margin-bottom: 0.5rem; }
+            p { color: #9ca3af; font-size: 0.9rem; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Organization Not Found</h1>
+            <p>Subdomain "<strong>${subdomain}</strong>" is not registered on EKAFY SaaS.</p>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
     const tenant = rows[0];
 
     if (tenant.status !== 'active') {
-      return res.status(403).send('This tenant account is suspended or inactive.');
+      return res.status(403).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>Tenant Suspended - EKAFY</title>
+          <style>
+            body { font-family: sans-serif; background: #0b0f19; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; text-align: center; }
+            .card { background: #111827; padding: 2.5rem; border-radius: 1rem; border: 1px solid #1f2937; max-width: 440px; }
+            h1 { color: #fbbf24; font-size: 1.5rem; margin-bottom: 0.5rem; }
+            p { color: #9ca3af; font-size: 0.9rem; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Tenant Inactive</h1>
+            <p>This tenant account (${tenant.name}) is currently suspended or inactive.</p>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
     // 4. Attach Tenant Metadata and Database Pool to Request

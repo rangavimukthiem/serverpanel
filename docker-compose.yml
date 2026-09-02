@@ -119,6 +119,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
+      - CORE_DOMAIN=${CORE_DOMAIN}
     labels:
       - "traefik.enable=true"
       # Catch-all routing for customer applications (e.g. *.ekafy.com and ekafy.com)
