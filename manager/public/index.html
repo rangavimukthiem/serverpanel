@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EKAFY Server Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">E</div>
+        <div>
+          <div class="brand-title">EKAFY</div>
+          <div class="brand-subtitle">Server Manager</div>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-header">Platform Management</div>
+        <a class="nav-item active" data-tab="overview">
+          <span class="nav-icon">📊</span> Overview &amp; Metrics
+        </a>
+        <a class="nav-item" data-tab="tenants">
+          <span class="nav-icon">🏢</span> SaaS Tenants
+        </a>
+        <a class="nav-item" data-tab="projects">
+          <span class="nav-icon">📁</span> Client Projects
+        </a>
+
+        <div class="nav-header" style="margin-top: 1rem;">Infrastructure</div>
+        <a class="nav-item" data-tab="infrastructure">
+          <span class="nav-icon">⚙️</span> Cluster &amp; Domains
+        </a>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="user-badge">
+          <div class="user-avatar" id="nav-user-avatar">A</div>
+          <div class="user-details">
+            <div class="user-name" id="nav-username">Admin</div>
+            <div class="user-role" id="nav-user-email">admin@ekafy.com</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="logout-btn" style="width: 100%;">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-area">
+
+      <!-- ── TAB 1: OVERVIEW ── -->
+      <div id="tab-overview" class="tab-content">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Cluster Overview</h1>
+            <p class="page-subtitle">Real-time status and telemetry of your EKAFY VPS infrastructure.</p>
+          </div>
+          <div class="header-actions">
+            <span class="badge badge-success">
+              <span class="pulse-dot"></span> System Live
+            </span>
+          </div>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid-metrics">
+          <div class="card">
+            <div class="metric-header">
+              <span class="metric-label">Memory Usage</span>
+              <div class="metric-icon">💾</div>
+            </div>
+            <div class="metric-value" id="metric-mem-usage">--%</div>
+            <div class="progress-track">
+              <div class="progress-bar" id="metric-mem-bar" style="width: 0%;"></div>
+            </div>
+            <div class="metric-sub" id="metric-mem-details">-- / --</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-header">
+              <span class="metric-label">Server Uptime</span>
+              <div class="metric-icon">⏱️</div>
+            </div>
+            <div class="metric-value" id="metric-uptime">--</div>
+            <div class="metric-sub">Continuous operation</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-header">
+              <span class="metric-label">Active Tenants</span>
+              <div class="metric-icon">🏢</div>
+            </div>
+            <div class="metric-value" id="metric-tenants-count">0</div>
+            <div class="metric-sub">Dedicated customer databases</div>
+          </div>
+
+          <div class="card">
+            <div class="metric-header">
+              <span class="metric-label">Agency Projects</span>
+              <div class="metric-icon">📁</div>
+            </div>
+            <div class="metric-value" id="metric-projects-count">0</div>
+            <div class="metric-sub">Prebuilt &amp; custom builds</div>
+          </div>
+        </div>
+
+        <!-- Cluster Services Status -->
+        <h2 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 1rem;">Core Cluster Services</h2>
+        <div class="cluster-grid">
+          <div class="service-card">
+            <div class="service-info">
+              <div class="service-icon">🔀</div>
+              <div>
+                <div class="service-name">Traefik Edge Proxy</div>
+                <div class="service-desc">Auto SSL &amp; Dynamic Subdomain Routing</div>
+              </div>
+            </div>
+            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
+          </div>
+
+          <div class="service-card">
+            <div class="service-info">
+              <div class="service-icon">🐬</div>
+              <div>
+                <div class="service-name">MariaDB Master Engine</div>
+                <div class="service-desc">Multi-tenant schema &amp; tenant databases</div>
+              </div>
+            </div>
+            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
+          </div>
+
+          <div class="service-card">
+            <div class="service-info">
+              <div class="service-icon">⚡</div>
+              <div>
+                <div class="service-name">Redis In-Memory Store</div>
+                <div class="service-desc">High-speed session &amp; job cache</div>
+              </div>
+            </div>
+            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
+          </div>
+
+          <div class="service-card">
+            <div class="service-info">
+              <div class="service-icon">🚀</div>
+              <div>
+                <div class="service-name">EKAFY Core SaaS</div>
+                <div class="service-desc">Multi-tenant customer business engine</div>
+              </div>
+            </div>
+            <span class="badge badge-success"><span class="pulse-dot"></span> Running</span>
+          </div>
+        </div>
+
+        <!-- Host Telemetry Info -->
+        <div class="card">
+          <h3 style="font-size: 1rem; font-weight: 700; margin-bottom: 1rem;">Host Environment Information</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; font-size: 0.875rem;">
+            <div>
+              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">HOSTNAME</span>
+              <span id="info-hostname" class="mono">--</span>
+            </div>
+            <div>
+              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">PLATFORM</span>
+              <span id="info-os">--</span>
+            </div>
+            <div>
+              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">LOAD AVERAGE (1m, 5m, 15m)</span>
+              <span id="info-load" class="mono">--</span>
+            </div>
+            <div>
+              <span style="color: var(--text-dim); display: block; font-size: 0.75rem;">RUNTIME</span>
+              <span id="info-node" class="mono">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 2: TENANTS ── -->
+      <div id="tab-tenants" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">SaaS Tenants</h1>
+            <p class="page-subtitle">Manage customer organizations, subdomains, and isolated databases.</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="open-create-tenant-btn">
+              <span>+</span> Provision Tenant
+            </button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-header-row">
+            <div class="table-title">Active Organizations</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer / Domain</th>
+                <th>Database</th>
+                <th>Plan Tier</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th style="text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="tenants-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── TAB 3: PROJECTS ── -->
+      <div id="tab-projects" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Client Projects</h1>
+            <p class="page-subtitle">Track custom developments and agency client deliveries.</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-header-row">
+            <div class="table-title">Project Registry</div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Project Name</th>
+                <th>Client</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="projects-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── TAB 4: INFRASTRUCTURE & DOMAINS ── -->
+      <div id="tab-infrastructure" class="tab-content" style="display: none;">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Infrastructure &amp; Domains</h1>
+            <p class="page-subtitle">Configured host entrypoints and reverse proxy mapping.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 1.5rem;">
+          <h2 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;">Domain Routing Map</h2>
+          <div style="display: flex; flex-direction: column; gap: 1rem;">
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
+              <div>
+                <div style="font-weight: 600; color: #fff;">Server Manager Dashboard</div>
+                <div class="mono" id="domain-manager" style="color: var(--primary);">dashboard.ekafy.com</div>
+              </div>
+              <span class="badge badge-success">HTTPS Active</span>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
+              <div>
+                <div style="font-weight: 600; color: #fff;">Customer Apps Wildcard Core</div>
+                <div class="mono" id="domain-core" style="color: var(--accent);">*.ekafy.com</div>
+              </div>
+              <span class="badge badge-success">Auto Subdomain Routing</span>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: var(--radius-md); border: 1px solid var(--border);">
+              <div>
+                <div style="font-weight: 600; color: #fff;">Webmin Host System Panel</div>
+                <div class="mono" id="domain-webmin" style="color: var(--warning);">panel.ekafy.com</div>
+              </div>
+              <a href="#" id="domain-webmin-link" target="_blank" class="btn btn-secondary btn-sm">
+                Open Webmin ↗
+              </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Provision Tenant Modal -->
+  <div class="modal-backdrop" id="tenant-modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Provision New SaaS Tenant</div>
+        <button type="button" class="modal-close" id="close-tenant-modal-btn">&times;</button>
+      </div>
+      <form id="create-tenant-form">
+        <div class="form-group">
+          <label class="form-label" for="tenant-name-input">Customer Organization Name</label>
+          <input type="text" id="tenant-name-input" class="form-input" placeholder="e.g. Acme Corp" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tenant-subdomain-input">Subdomain Slug</label>
+          <input type="text" id="tenant-subdomain-input" class="form-input mono" placeholder="e.g. acme" required pattern="[a-zA-Z0-9-]+" title="Only alphanumeric characters and hyphens allowed">
+          <span style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; display: block;">App will be live at: https://[subdomain].ekafy.com</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="tenant-plan-select">Subscription Plan</label>
+          <select id="tenant-plan-select" class="form-select">
+            <option value="basic">Basic Tier</option>
+            <option value="pro">Pro Tier</option>
+            <option value="enterprise">Enterprise Tier</option>
+          </select>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancel-tenant-modal-btn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submit-tenant-btn">Provision Tenant</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.75rem;"></div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

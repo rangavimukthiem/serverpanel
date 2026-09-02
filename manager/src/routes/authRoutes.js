@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const { verifyToken } = require('../middleware/authMiddleware');
 
-// All routes are prefixed with /api/auth
+router.get('/status', authController.getAuthStatus);
+router.post('/login', authController.passwordLogin);
+router.post('/register', authController.register);
 router.post('/google', authController.googleLogin);
+router.get('/me', verifyToken, authController.getMe);
 
 module.exports = router;

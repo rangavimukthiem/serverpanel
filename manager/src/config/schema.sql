@@ -13,9 +13,11 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(100) UNIQUE,
   email VARCHAR(320) NOT NULL UNIQUE,
+  password_hash VARCHAR(255),
   google_sub VARCHAR(255) UNIQUE,
-  role ENUM('admin', 'user') DEFAULT 'user',
+  role ENUM('admin', 'user') DEFAULT 'admin',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

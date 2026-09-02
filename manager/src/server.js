@@ -9,11 +9,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const systemRoutes = require('./routes/systemRoutes');
 const tenantRoutes = require('./routes/tenantRoutes');
 const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const { verifyToken, requireAdmin } = require('./middleware/authMiddleware');
+
+// Serve Static Frontend Dashboard Assets
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Database Connection Pool
 const pool = mysql.createPool({
@@ -32,53 +36,20 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'ekafy-manager' });
 });
 
-// Root Manager Welcome / Status Interface
-app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>EKAFY Server Manager</title>
-      <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; text-align: center; }
-        .card { background: #111827; padding: 3rem 2.5rem; border-radius: 1rem; border: 1px solid #1f2937; max-width: 540px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.6); }
-        h1 { font-size: 2rem; color: #60a5fa; margin-bottom: 0.5rem; }
-        p { color: #9ca3af; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.5rem; }
-        .badge { display: inline-block; padding: 0.35rem 0.85rem; background: #1e3a8a; color: #93c5fd; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; margin-bottom: 1.5rem; }
-        .endpoints { background: #030712; border-radius: 0.5rem; padding: 1rem; text-align: left; font-family: monospace; font-size: 0.85rem; color: #34d399; }
-        .endpoints div { margin: 0.25rem 0; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <h1>EKAFY Server Manager</h1>
-        <p>Admin Control Plane and API Gateway are active and secure.</p>
-        <span class="badge">● Server Manager Online</span>
-        <div class="endpoints">
-          <div>POST /api/auth/login</div>
-          <div>POST /api/auth/register</div>
-          <div>GET  /api/health</div>
-          <div>GET  /api/tenants</div>
-          <div>GET  /api/projects</div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `);
-});
-
-// Authentication Routes (Public)
+// API Routes
 app.use('/api/auth', authRoutes);
-
-// Admin Routes (Protected by JWT and Admin Role)
+app.use('/api/system', systemRoutes);
 app.use('/api/tenants', verifyToken, requireAdmin, tenantRoutes);
 app.use('/api/projects', projectRoutes);
-
-// Client & Admin Routes (Protected by JWT, role checked in controller)
 app.use('/api/chat', chatRoutes);
+
+// SPA Frontend Routing Fallback
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ success: false, error: 'Endpoint not found' });
+  }
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 
 // Initialize Database Schema on Boot with Retry Logic
 async function initDB(retries = 15, delay = 2000) {
