@@ -7,20 +7,32 @@ const { masterPool, getTenantPool } = require('../config/db');
  */
 async function tenantResolver(req, res, next) {
   try {
-    // 1. Extract hostname (e.g. ekafyweb.ekafy.com)
+    // 1. Extract hostname (e.g. annexlk.ekafy.com or ekafyweb.ekafy.com)
     const rawHost = req.get('host');
     if (!rawHost) {
       return res.status(400).send('No Host header provided');
     }
 
     const host = rawHost.split(':')[0].toLowerCase();
-    const parts = host.split('.');
     const coreDomain = (process.env.CORE_DOMAIN || 'ekafy.com').toLowerCase();
 
-    // 2. Handle Root Domain (e.g. ekafy.com, www.ekafy.com, localhost)
-    const isRootDomain = host === coreDomain || host === `www.${coreDomain}` || host === 'localhost' || parts.length < (coreDomain.split('.').length + 1);
+    // 2. Identify Subdomain vs Root Domain
+    let subdomain = null;
+    if (host.endsWith('.' + coreDomain)) {
+      subdomain = host.slice(0, -(coreDomain.length + 1));
+      if (subdomain === 'www' || subdomain === '') {
+        subdomain = null;
+      }
+    } else if (host !== coreDomain && host !== 'localhost') {
+      // Fallback for custom domains or localhost testing (e.g. annexlk.localhost)
+      const parts = host.split('.');
+      if (parts.length > 1 && parts[0] !== 'www') {
+        subdomain = parts[0];
+      }
+    }
 
-    if (isRootDomain) {
+    // 3. Handle Root Domain (ekafy.com)
+    if (!subdomain) {
       if (req.path === '/api/health') {
         return res.json({ status: 'ok', service: 'ekafy-core-engine' });
       }
@@ -51,10 +63,7 @@ async function tenantResolver(req, res, next) {
       `);
     }
 
-    // Extract subdomain: for "ekafyweb.ekafy.com" -> "ekafyweb"
-    const subdomain = parts[0];
-
-    // 3. Lookup Tenant in Master Database
+    // 4. Lookup Tenant in Master Database
     const [rows] = await masterPool.execute(
       'SELECT id, name, subdomain, db_name, plan_type, status FROM tenants WHERE subdomain = ?',
       [subdomain]
@@ -110,7 +119,7 @@ async function tenantResolver(req, res, next) {
       `);
     }
 
-    // 4. Attach Tenant Metadata and Database Pool to Request
+    // 5. Attach Tenant Metadata and Database Pool to Request
     req.tenant = tenant;
     req.db = await getTenantPool(tenant.db_name);
 

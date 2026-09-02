@@ -114,8 +114,11 @@ services:
       - PORT=3000
       - MASTER_DB_HOST=mariadb
       - MASTER_DB_PORT=3306
-      - MASTER_DB_USER=root
-      - MASTER_DB_PASSWORD=${DB_ROOT_PASSWORD}
+      - MASTER_DB_USER=ekafy_admin
+      - MASTER_DB_PASSWORD=${DB_ADMIN_PASSWORD}
+      - DB_USER=ekafy_admin
+      - DB_PASSWORD=${DB_ADMIN_PASSWORD}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
