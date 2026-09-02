@@ -23,7 +23,7 @@
     }
     .auth-card {
       width: 100%;
-      max-width: 440px;
+      max-width: 420px;
       background: var(--bg-card-solid);
       border: 1px solid var(--border);
       border-radius: var(--radius-xl);
@@ -40,13 +40,14 @@
       justify-content: center;
     }
     .auth-title {
-      font-size: 1.5rem;
+      font-size: 1.45rem;
       font-weight: 800;
       color: #fff;
       margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
     }
     .auth-desc {
-      font-size: 0.9rem;
+      font-size: 0.875rem;
       color: var(--text-muted);
       line-height: 1.5;
       margin-bottom: 2.25rem;
@@ -66,18 +67,6 @@
       font-size: 0.85rem;
       margin-bottom: 1.5rem;
       text-align: left;
-      display: none;
-    }
-    .config-box {
-      background: rgba(56, 189, 248, 0.08);
-      border: 1px solid rgba(56, 189, 248, 0.2);
-      color: #bae6fd;
-      padding: 1rem;
-      border-radius: var(--radius-md);
-      font-size: 0.85rem;
-      margin-top: 1.5rem;
-      text-align: left;
-      line-height: 1.5;
       display: none;
     }
     .shield-badge {
@@ -103,7 +92,7 @@
     </div>
 
     <h1 class="auth-title">Admin Sign In</h1>
-    <p class="auth-desc">Single Sign-On is secured via Google OAuth. Authenticate with your authorized administrator Google account.</p>
+    <p class="auth-desc">Sign in with your authorized Google account to access the administrative control panel.</p>
 
     <div class="error-box" id="auth-error"></div>
 
@@ -113,20 +102,13 @@
       <div id="google-signin-btn"></div>
     </div>
 
-    <!-- Configuration prompt if Google OAuth is not set in .env -->
-    <div class="config-box" id="config-notice">
-      <strong>⚠️ Google OAuth Setup Needed</strong><br>
-      Please configure <code style="color:#38bdf8;">GOOGLE_OAUTH_CLIENT_ID</code> in your server's <code style="color:#38bdf8;">.env</code> file to enable Google authentication.
-    </div>
-
     <div class="shield-badge">
-      <span>🔒</span> Protected by EKAFY Master Control Plane
+      <span>🔒</span> Protected Management Console
     </div>
   </div>
 
   <script>
     const errorBox = document.getElementById('auth-error');
-    const configNotice = document.getElementById('config-notice');
 
     function showError(msg) {
       errorBox.textContent = msg;
@@ -142,7 +124,7 @@
     async function handleGoogleCredential(response) {
       clearError();
       if (!response.credential) {
-        showError('Google authentication failed. No credential received.');
+        showError('Authentication failed. Please try again.');
         return;
       }
 
@@ -159,10 +141,10 @@
           localStorage.setItem('ekafy_user', JSON.stringify(data.user));
           window.location.href = '/';
         } else {
-          showError(data.error || 'Access denied. You are not authorized to access this dashboard.');
+          showError(data.error || 'Access denied. You are not authorized to access this panel.');
         }
       } catch (err) {
-        showError('Network error connecting to Server Manager API.');
+        showError('Unable to connect to authentication service.');
       }
     }
 
@@ -176,7 +158,7 @@
           callback();
         } else if (attempts >= maxAttempts) {
           clearInterval(interval);
-          console.warn('Google GSI SDK loading timed out.');
+          console.warn('Authentication service timeout.');
         }
       }, 100);
     }
@@ -188,7 +170,6 @@
         const data = await res.json();
 
         if (data.success && data.googleClientId) {
-          configNotice.style.display = 'none';
           waitForGoogle(() => {
             window.google.accounts.id.initialize({
               client_id: data.googleClientId,
@@ -209,11 +190,9 @@
               }
             );
           });
-        } else {
-          configNotice.style.display = 'block';
         }
       } catch (err) {
-        showError('Failed to initialize authentication service.');
+        console.error('Failed to initialize auth:', err);
       }
     }
 
