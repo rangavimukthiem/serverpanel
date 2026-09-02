@@ -91,23 +91,88 @@ else
     echo -e "${GREEN}Webmin is already installed.${NC}"
 fi
 
-# 9. Environment Validation
-echo -e "${YELLOW}Step 8: Validating Environment Configuration...${NC}"
+# 8. Environment Setup & Password Generation
+echo -e "${YELLOW}Step 8: Configuring Environment & Secrets...${NC}"
 if [ ! -f ".env" ]; then
-    echo -e "${YELLOW}Warning: .env file not found. Copying from .env.example...${NC}"
+    echo -e "${YELLOW}.env file not found. Auto-generating configuration...${NC}"
     if [ -f ".env.example" ]; then
         cp .env.example .env
-        echo -e "${RED}ACTION REQUIRED: Please configure your passwords and domains in the .env file before starting the cluster.${NC}"
-        echo -e "Run: nano .env && sudo bash setup-vps.sh"
-        exit 1
     else
         echo -e "${RED}Error: .env.example not found.${NC}"
         exit 1
     fi
+
+    # Helper function to generate secure random strings
+    gen_secret() {
+        if command -v openssl &> /dev/null; then
+            openssl rand -hex 16
+        else
+            tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 32
+        fi
+    }
+
+    gen_jwt() {
+        if command -v openssl &> /dev/null; then
+            openssl rand -base64 32
+        else
+            tr -dc 'A-Za-z0-9_=-' < /dev/urandom | head -c 44
+        fi
+    }
+
+    # Generate secure random credentials
+    DB_ROOT_PASS=$(gen_secret)
+    DB_ADMIN_PASS=$(gen_secret)
+    REDIS_PASS=$(gen_secret)
+    JWT_SEC=$(gen_jwt)
+
+    # Interactive Domain Configuration (or defaults if non-interactive)
+    CORE_DOM="ekafy.com"
+    MGR_DOM="dashboard.ekafy.com"
+    WEBMIN_DOM="panel.ekafy.com"
+    EMAIL="admin@ekafy.com"
+
+    if [ -t 0 ] || [ -e /dev/tty ]; then
+        echo -e "${GREEN}--------------------------------------------------${NC}"
+        echo -e "${GREEN} Quick Setup: Enter your domain settings below     ${NC}"
+        echo -e "${GREEN} (Press [ENTER] to accept the suggested defaults)  ${NC}"
+        echo -e "${GREEN}--------------------------------------------------${NC}"
+
+        exec < /dev/tty || true
+        read -r -p "Base Domain [ekafy.com]: " input_core
+        [ -n "$input_core" ] && CORE_DOM="$input_core"
+
+        read -r -p "Server Manager Domain [dashboard.${CORE_DOM}]: " input_mgr
+        MGR_DOM="${input_mgr:-dashboard.${CORE_DOM}}"
+
+        read -r -p "Webmin Domain [panel.${CORE_DOM}]: " input_webmin
+        WEBMIN_DOM="${input_webmin:-panel.${CORE_DOM}}"
+
+        read -r -p "Let's Encrypt SSL Email [admin@${CORE_DOM}]: " input_email
+        EMAIL="${input_email:-admin@${CORE_DOM}}"
+    fi
+
+    # Apply configuration to .env
+    sed -i "s|^CORE_DOMAIN=.*|CORE_DOMAIN=${CORE_DOM}|" .env
+    sed -i "s|^MANAGER_DOMAIN=.*|MANAGER_DOMAIN=${MGR_DOM}|" .env
+    sed -i "s|^WEBMIN_DOMAIN=.*|WEBMIN_DOMAIN=${WEBMIN_DOM}|" .env
+    sed -i "s|^SSL_EMAIL=.*|SSL_EMAIL=${EMAIL}|" .env
+
+    sed -i "s|^DB_ROOT_PASSWORD=.*|DB_ROOT_PASSWORD=${DB_ROOT_PASS}|" .env
+    sed -i "s|^DB_ADMIN_PASSWORD=.*|DB_ADMIN_PASSWORD=${DB_ADMIN_PASS}|" .env
+    sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=${REDIS_PASS}|" .env
+    sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SEC}|" .env
+
+    echo -e "${GREEN}✓ .env created successfully with secure credentials!${NC}"
+    echo -e "  - Core Domain:    ${CORE_DOM}"
+    echo -e "  - Manager Domain: ${MGR_DOM}"
+    echo -e "  - Webmin Domain:  ${WEBMIN_DOM}"
+    echo -e "  - SSL Email:      ${EMAIL}"
+else
+    echo -e "${GREEN}✓ Existing .env file found.${NC}"
 fi
 
 # 9. Persistent Storage Prep
-echo -e "${YELLOW}Step 8: Preparing Persistent Data Directories...${NC}"
+echo -e "${YELLOW}Step 9: Preparing Persistent Data Directories...${NC}"
 mkdir -p data/mariadb
 mkdir -p data/redis
 mkdir -p data/letsencrypt
@@ -115,7 +180,7 @@ touch data/letsencrypt/acme.json
 chmod 600 data/letsencrypt/acme.json
 
 # 10. Spin up cluster
-echo -e "${YELLOW}Step 9: Starting the EKAFY Cluster via Docker Compose...${NC}"
+echo -e "${YELLOW}Step 10: Starting the EKAFY Cluster via Docker Compose...${NC}"
 docker compose up -d --build
 
 echo -e "${GREEN}==========================================${NC}"
