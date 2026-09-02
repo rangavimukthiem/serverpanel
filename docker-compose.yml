@@ -143,12 +143,7 @@ services:
     image: alpine/socat
     container_name: ekafy-webmin-proxy
     restart: unless-stopped
-    entrypoint: ["sh", "-c"]
-    command:
-      - |
-        GW=$$(ip route | awk '/default/ {print $$3}')
-        echo "Forwarding to host gateway: $$GW:10000"
-        exec socat -d -d TCP-LISTEN:10000,fork,reuseaddr TCP:$$GW:10000
+    command: -d -d TCP-LISTEN:10000,fork,reuseaddr TCP:172.28.0.1:10000
     labels:
       - "traefik.enable=true"
       # Routing for Webmin
@@ -164,3 +159,7 @@ networks:
   ekafy-net:
     name: ekafy-net
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+          gateway: 172.28.0.1
