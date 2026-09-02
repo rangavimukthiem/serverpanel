@@ -197,6 +197,17 @@
     }
 
     window.onload = () => {
+      // If user just logged out, disable Google auto-select and initialize login UI
+      if (window.location.search.includes('logout=1')) {
+        waitForGoogle(() => {
+          if (window.google && window.google.accounts && window.google.accounts.id) {
+            window.google.accounts.id.disableAutoSelect();
+          }
+        });
+        initAuth();
+        return;
+      }
+
       // If user is already logged in with valid token, redirect to dashboard
       const token = localStorage.getItem('ekafy_token');
       if (token) {

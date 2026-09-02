@@ -172,10 +172,15 @@ function setupNavigation() {
     });
   });
 
-  document.getElementById('logout-btn').addEventListener('click', () => {
-    localStorage.clear();
-    window.location.href = '/login.html';
-  });
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      localStorage.removeItem('ekafy_token');
+      localStorage.removeItem('ekafy_user');
+      sessionStorage.clear();
+      window.location.href = '/login.html?logout=1';
+    });
+  }
 }
 
 // 1. Load Live Metrics
