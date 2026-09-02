@@ -129,17 +129,17 @@ exports.deployProject = async (req, res) => {
       }
     }
 
-    // 3. Ensure a Dockerfile exists
+    // 3. Ensure a Dockerfile exists and uses npm start
     const dockerfilePath = path.join(projectDir, 'Dockerfile');
     if (!fs.existsSync(dockerfilePath)) {
       let defaultDockerfile = `
 FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --production
+RUN npm install
 COPY . .
 EXPOSE ${appPort}
-CMD ["node", "src/server.js"]
+CMD ["npm", "start"]
 `;
       if (runtime_type === 'static') {
         defaultDockerfile = `
@@ -149,6 +149,15 @@ EXPOSE 80
 `;
       }
       fs.writeFileSync(dockerfilePath, defaultDockerfile.trim());
+    } else {
+      // If an existing Dockerfile has hardcoded src/server.js, update it to npm start
+      try {
+        let existingContent = fs.readFileSync(dockerfilePath, 'utf8');
+        if (existingContent.includes('src/server.js')) {
+          existingContent = existingContent.replace('node src/server.js', 'npm start').replace('["node", "src/server.js"]', '["npm", "start"]');
+          fs.writeFileSync(dockerfilePath, existingContent);
+        }
+      } catch (_) {}
     }
 
     // 4. Write Application .env File
