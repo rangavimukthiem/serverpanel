@@ -3,9 +3,11 @@ services:
   # Traefik Reverse Proxy
   # ---------------------------------------------------------
   traefik:
-    image: traefik:v2.10
+    image: traefik:v3.1
     container_name: ekafy-traefik
     restart: unless-stopped
+    environment:
+      - DOCKER_API_VERSION=1.44
     command:
       - "--api.insecure=false"
       - "--providers.docker=true"

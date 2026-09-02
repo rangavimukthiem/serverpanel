@@ -78,6 +78,11 @@ else
     echo -e "${GREEN}Docker is already installed.${NC}"
 fi
 
+# Ensure sudo user has docker permissions
+if [ -n "$SUDO_USER" ]; then
+    usermod -aG docker "$SUDO_USER" || true
+fi
+
 # 8. Install Webmin
 echo -e "${YELLOW}Step 7: Installing Webmin on Host...${NC}"
 if ! command -v webmin &> /dev/null; then
@@ -195,6 +200,10 @@ else
     fi
 fi
 
+if [ -n "$SUDO_USER" ]; then
+    chown "$SUDO_USER:$SUDO_USER" .env 2>/dev/null || true
+fi
+
 # 9. Free Port 80 & 443 from Host Web Servers
 echo -e "${YELLOW}Step 9: Ensuring Ports 80 & 443 are free for Traefik...${NC}"
 for svc in apache2 nginx httpd caddy lighttpd; do
@@ -220,5 +229,5 @@ docker compose up -d --build
 echo -e "${GREEN}==========================================${NC}"
 echo -e "${GREEN}  EKAFY VPS is Secured & Platform Live!   ${NC}"
 echo -e "${GREEN}==========================================${NC}"
-echo -e "Check cluster status with: docker compose ps"
-echo -e "Check proxy logs with:     docker compose logs -f traefik"
+echo -e "Check cluster status with: sudo docker compose ps"
+echo -e "Check proxy logs with:     sudo docker compose logs -f traefik"
